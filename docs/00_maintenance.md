@@ -32,6 +32,7 @@ cargo run -- check-integrity
 | `src/templates.rs` / `src/templates/` | HTMLテンプレートと共通UI補正 | 画面構造・共通表示 |
 | `src/specifications.rs` | `docs/*.md` の管理者向け表示 | 仕様書の表示方式 |
 | `migrations_postgres/` | PostgreSQLスキーマの履歴 | テーブル・インデックス変更 |
+| `docker-compose.yml` | 開発用PostgreSQLコンテナ | `docs/10_docker_postgresql.md` |
 
 ## ルートを追加する場合
 
