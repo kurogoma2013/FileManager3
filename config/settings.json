@@ -1,0 +1,11 @@
+{
+  "database_url": "sqlite:data/filemanager.db",
+  "storage_dir": "./data/storage",
+  "host": "0.0.0.0",
+  "port": 3000,
+  "secure_cookie": true,
+  "tls_cert_path": "/private/tmp/filemanager3-tls/dev.crt",
+  "tls_key_path": "/private/tmp/filemanager3-tls/dev.key",
+  "webauthn_rp_id": "mbpm5.local",
+  "webauthn_origin": "https://mbpm5.local:3000"
+}

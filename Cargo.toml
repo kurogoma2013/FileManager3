@@ -1,0 +1,30 @@
+[package]
+name = "filemanager3"
+version = "0.0.2026091500"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.7", features = ["multipart"] }
+axum-server = { version = "0.7", features = ["tls-rustls"] }
+tokio = { version = "1.8", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "macros", "migrate"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing = "0.1"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["full"] }
+argon2 = "0.5"
+base64 = "0.22"
+pdf-extract = "0.7"
+sha2 = "0.10"
+hex = "0.4"
+uuid = { version = "1.0", features = ["v4"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+webauthn-rs = { version = "0.5.5", features = ["danger-allow-state-serialisation"] }
+image = { version = "0.25.10", features = ["webp"] }
+webp = "0.3.1"
+openssl = { version = "0.10", features = ["vendored"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-no-provider"] }

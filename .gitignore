@@ -1,0 +1,10 @@
+/target
+.env
+*.secret.key
+.DS_Store
+*.db
+/storage
+/data
+/dist
+
+
