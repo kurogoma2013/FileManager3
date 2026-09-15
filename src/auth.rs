@@ -1,9 +1,9 @@
+use crate::db::DbPool;
 use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
 use rand_core::OsRng;
-use sqlx::SqlitePool;
 
 pub fn hash_password(password: &str) -> anyhow::Result<String> {
     let salt = SaltString::generate(&mut OsRng);
@@ -14,11 +14,11 @@ pub fn hash_password(password: &str) -> anyhow::Result<String> {
 }
 
 pub async fn authenticate_credentials(
-    pool: &SqlitePool,
+    pool: &DbPool,
     username: &str,
     password: &str,
 ) -> anyhow::Result<Option<(i64, String)>> {
-    let row: Option<(i64, String, String)> = sqlx::query_as(
+    let row: Option<(i64, String, String)> = crate::db::query_as(
         "SELECT id, password_hash, role FROM users WHERE username = ? AND active = 1",
     )
     .bind(username)

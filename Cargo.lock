@@ -811,7 +811,7 @@ dependencies = [
 
 [[package]]
 name = "filemanager3"
-version = "0.0.2026091500"
+version = "0.0.2026091501"
 dependencies = [
  "anyhow",
  "argon2",

@@ -1,5 +1,6 @@
 use crate::app_state::prepare_database;
 use crate::config::AppConfig;
+use crate::db::DbPool;
 use crate::handlers;
 use crate::models::AppState;
 use crate::specifications;
@@ -9,7 +10,6 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
-use sqlx::sqlite::SqlitePool;
 use std::env;
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
@@ -19,7 +19,7 @@ use webauthn_rs::prelude::*;
 ///
 /// 起動処理は `main.rs` に残し、HTTPの構成はこのモジュールに集約することで、
 /// ルート追加時にTLSやプロセス起動の処理へ影響を与えないようにする。
-pub async fn create_app(pool: SqlitePool, config: &AppConfig) -> anyhow::Result<Router> {
+pub async fn create_app(pool: DbPool, config: &AppConfig) -> anyhow::Result<Router> {
     prepare_database(&pool, config).await?;
     let webauthn = build_webauthn(config)?;
     let state = Arc::new(AppState {

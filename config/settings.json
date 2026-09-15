@@ -1,5 +1,5 @@
 {
-  "database_url": "sqlite:data/filemanager.db",
+  "database_url": "postgres://filemanager3@127.0.0.1/filemanager3",
   "storage_dir": "./data/storage",
   "host": "0.0.0.0",
   "port": 3000,

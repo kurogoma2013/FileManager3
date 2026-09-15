@@ -1,13 +1,19 @@
 use crate::auth;
 use crate::config::AppConfig;
+use crate::db::DbPool;
 use crate::handlers::auth_handlers::cleanup_expired_auth_state;
-use sqlx::sqlite::SqlitePool;
 use std::path::{Path, PathBuf};
 
-pub async fn prepare_database(pool: &SqlitePool, config: &AppConfig) -> anyhow::Result<()> {
+pub async fn prepare_database(pool: &DbPool, config: &AppConfig) -> anyhow::Result<()> {
+    #[cfg(test)]
     sqlx::migrate!("./migrations").run(pool).await?;
+    #[cfg(not(test))]
+    sqlx::migrate!("./migrations_postgres").run(pool).await?;
     cleanup_expired_auth_state(pool).await?;
-    sqlx::query("PRAGMA optimize").execute(pool).await?;
+    #[cfg(test)]
+    crate::db::query("PRAGMA optimize").execute(pool).await?;
+    #[cfg(not(test))]
+    crate::db::query("ANALYZE").execute(pool).await?;
     seed_admin_user(pool, config).await?;
     crate::integrity::reconcile_startup(pool, &config.storage_dir).await
 }
@@ -30,8 +36,8 @@ pub async fn clear_storage_for_new_database(
     crate::integrity::quarantine_existing_storage(storage_dir).await
 }
 
-async fn seed_admin_user(pool: &SqlitePool, config: &AppConfig) -> anyhow::Result<()> {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+async fn seed_admin_user(pool: &DbPool, config: &AppConfig) -> anyhow::Result<()> {
+    let count: i64 = crate::db::query_scalar("SELECT COUNT(*) FROM users")
         .fetch_one(pool)
         .await?;
     if count != 0 {
@@ -52,7 +58,7 @@ async fn seed_admin_user(pool: &SqlitePool, config: &AppConfig) -> anyhow::Resul
     };
     let hash = auth::hash_password(raw_password)?;
     let webauthn_id = uuid::Uuid::new_v4().to_string();
-    sqlx::query(
+    crate::db::query(
         "INSERT INTO users (username, password_hash, role, webauthn_id, created_at, updated_at) VALUES (?, ?, 'admin', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
     )
     .bind("admin")

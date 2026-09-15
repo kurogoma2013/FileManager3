@@ -38,7 +38,7 @@ pub async fn list_local_login_usernames(
     if !is_local {
         return Err(ApiError::NotFound);
     }
-    let usernames: Vec<String> = sqlx::query_scalar(
+    let usernames: Vec<String> = crate::db::query_scalar(
         "SELECT username FROM users WHERE active = 1 ORDER BY username COLLATE NOCASE ASC",
     )
     .fetch_all(&state.pool)
@@ -62,7 +62,7 @@ pub async fn list_users(
         return Err(ApiError::Forbidden);
     }
     let query = if user.1 == "admin" {
-        sqlx::query_as::<_, UserSummary>(
+        crate::db::query_as::< UserSummary>(
             "SELECT users.id, users.username, users.role,
             COALESCE(strftime('%Y-%m-%d %H:%M:%S', users.updated_at, '+9 hours'), strftime('%Y-%m-%d %H:%M:%S', 'now', '+9 hours')) as updated_at,
             COUNT(passkeys.id) as passkey_count
@@ -73,7 +73,7 @@ pub async fn list_users(
          ORDER BY users.id ASC",
         )
     } else {
-        sqlx::query_as::<_, UserSummary>(
+        crate::db::query_as::< UserSummary>(
             "SELECT users.id, users.username, users.role,
             COALESCE(strftime('%Y-%m-%d %H:%M:%S', users.updated_at, '+9 hours'), strftime('%Y-%m-%d %H:%M:%S', 'now', '+9 hours')) as updated_at,
             COUNT(passkeys.id) as passkey_count
@@ -94,7 +94,7 @@ pub async fn list_deleted_users(
     headers: HeaderMap,
 ) -> Result<Json<Vec<UserSummary>>, ApiError> {
     authenticate_admin(&state, &headers).await?;
-    let users: Vec<UserSummary> = sqlx::query_as(
+    let users: Vec<UserSummary> = crate::db::query_as(
         "SELECT users.id, users.username, users.role,
             COALESCE(strftime('%Y-%m-%d %H:%M:%S', users.updated_at, '+9 hours'), strftime('%Y-%m-%d %H:%M:%S', 'now', '+9 hours')) as updated_at,
             COUNT(passkeys.id) as passkey_count
@@ -129,7 +129,7 @@ pub async fn create_user(
             "ユーザー名・8文字以上のパスワード・有効なロールが必要です",
         ));
     }
-    sqlx::query(
+    crate::db::query(
         "INSERT INTO users (username, password_hash, role, webauthn_id, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
     )
         .bind(request.username.trim())
@@ -164,7 +164,7 @@ pub async fn update_user(
         if !valid_user_role(role.as_str()) {
             return Err(ApiError::BadRequest("有効なロールを指定してください"));
         }
-        sqlx::query("UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+        crate::db::query("UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
             .bind(role)
             .bind(id)
             .execute(&state.pool)
@@ -178,7 +178,7 @@ pub async fn update_user(
                 return Err(ApiError::BadRequest("パスワードは8文字以上必要です"));
             }
             let hash = auth::hash_password(pwd).map_err(|_| ApiError::Storage)?;
-            sqlx::query(
+            crate::db::query(
                 "UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             )
             .bind(hash)
@@ -207,7 +207,7 @@ pub async fn delete_user(
     }
 
     let target_role: Option<String> =
-        sqlx::query_scalar("SELECT role FROM users WHERE id = ? AND active = 1")
+        crate::db::query_scalar("SELECT role FROM users WHERE id = ? AND active = 1")
             .bind(id)
             .fetch_optional(&state.pool)
             .await?;
@@ -221,7 +221,7 @@ pub async fn delete_user(
     }
 
     let mut transaction = state.pool.begin().await?;
-    let result = sqlx::query(
+    let result = crate::db::query(
         "UPDATE users SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND active = 1",
     )
     .bind(id)
@@ -230,7 +230,7 @@ pub async fn delete_user(
     if result.rows_affected() == 0 {
         return Err(ApiError::NotFound);
     }
-    sqlx::query("UPDATE sessions SET expires_at = CURRENT_TIMESTAMP WHERE user_id = ?")
+    crate::db::query("UPDATE sessions SET expires_at = CURRENT_TIMESTAMP WHERE user_id = ?")
         .bind(id)
         .execute(&mut *transaction)
         .await?;
@@ -244,7 +244,7 @@ pub async fn permanently_delete_user(
     headers: HeaderMap,
 ) -> Result<StatusCode, ApiError> {
     authenticate_admin(&state, &headers).await?;
-    let result = sqlx::query("DELETE FROM users WHERE id = ? AND active = 0")
+    let result = crate::db::query("DELETE FROM users WHERE id = ? AND active = 0")
         .bind(id)
         .execute(&state.pool)
         .await?;
@@ -272,7 +272,7 @@ pub async fn grant_project_permission(
             "permissionはmember・viewerのいずれかです",
         ));
     }
-    sqlx::query(
+    crate::db::query(
         "INSERT INTO project_permissions (user_id, project_id, permission) VALUES (?, ?, ?)
          ON CONFLICT(user_id, project_id) DO UPDATE SET permission = excluded.permission",
     )

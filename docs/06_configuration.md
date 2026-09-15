@@ -6,7 +6,7 @@
 
 | 環境変数 / キー | 説明 | 既定値 |
 | --- | --- | --- |
-| `DATABASE_URL` / `database_url` | SQLite接続URL | `sqlite:data/filemanager.db` |
+| `DATABASE_URL` / `database_url` | PostgreSQL接続URL | `postgres://filemanager3:パスワード@127.0.0.1/filemanager3` |
 | `FILE_STORAGE_DIR` / `storage_dir` | 共通ファイル保存ディレクトリ（隔離先は配下の`.quarantine`） | `./data/storage` |
 | `HOST` / `bind_address` | 待ち受けアドレス | `0.0.0.0` |
 | `PORT` / `port` | 待ち受けポート | `3000` |
@@ -39,12 +39,12 @@ cargo run
 ## 注意事項
 - **HTTPS必須**: HTTPでの起動は拒否されます。
 - **LANパスキー**: IPアドレス直接アクセスではパスキー不可のため、証明書に対応したホスト名でアクセスします。
-- **データ初期化**: SQLiteのDBファイルと保存ディレクトリは起動時に作成されます。初回起動時は `ADMIN_PASSWORD` を指定します。既存DBの管理者パスワードは上書きされません。
+- **データ初期化**: PostgreSQLの接続先・データベース・権限を事前に用意します。初回起動時は `ADMIN_PASSWORD` を指定します。既存DBの管理者パスワードは上書きされません。
 - **Googleログイン**: Google CloudでOAuthクライアント（ウェブアプリケーション）を作成し、上記のリダイレクトURIを承認済みのリダイレクトURIへ登録します。3項目がすべて設定された場合だけログイン画面にボタンが表示されます。Googleで初回ログインしたユーザーは `member` 権限で作成され、既存ユーザーとメールアドレスが一致する場合はそのユーザーへ紐付けます。Googleから返されたメールアドレスが未確認の場合はログインできません。
 
 ## 更新スクリプト
 
-Ubuntuのsystemd環境では、リポジトリの `scripts/update.sh` を使用して更新します。ソースコードの取得、リリースビルド、SQLite DBとストレージのバックアップ、サービス再起動、HTTPS疎通確認を自動で行います。バックアップ先にはDBファイル、必要なWAL/SHMファイル、`storage.tar.gz`、SHA-256マニフェストを保存します。
+Ubuntuのsystemd環境では、リポジトリの `scripts/update.sh` を使用して更新します。ソースコードの取得、リリースビルド、PostgreSQLの論理バックアップとストレージのバックアップ、サービス再起動、HTTPS疎通確認を自動で行います。
 
 ```bash
 cd /opt/filemanager3/source

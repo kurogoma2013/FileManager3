@@ -1,4 +1,5 @@
 use crate::core::can_manage_projects;
+use crate::db::DbPool;
 use crate::handlers::auth_handlers::{
     authenticate_admin, authenticate_headers, require_project_access,
 };
@@ -10,7 +11,6 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::sqlite::SqlitePool;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -208,10 +208,7 @@ pub async fn search_projects(
     Ok(Json(projects))
 }
 
-async fn ensure_dealer_exists(
-    pool: &SqlitePool,
-    dealer_name: Option<&str>,
-) -> Result<(), ApiError> {
+async fn ensure_dealer_exists(pool: &DbPool, dealer_name: Option<&str>) -> Result<(), ApiError> {
     let Some(raw_name) = dealer_name else {
         return Ok(());
     };
@@ -219,7 +216,7 @@ async fn ensure_dealer_exists(
     if name.is_empty() {
         return Ok(());
     }
-    sqlx::query(
+    crate::db::query(
         "INSERT INTO dealers (name, address) VALUES (?, '')
          ON CONFLICT(name) DO UPDATE SET deleted_at = NULL",
     )
@@ -258,9 +255,9 @@ pub async fn create_project(
         return Err(ApiError::BadRequest("案件名・案件名カナ・販売店は必須です"));
     }
     ensure_dealer_exists(&state.pool, request.dealer.as_deref()).await?;
-    let result = sqlx::query(
+    let project_id = crate::db::query_scalar::< i64>(
         "INSERT INTO projects (project_number, name, kana, address, dealer, assignee, latitude, longitude, plus_code, phone, email, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) RETURNING id",
     )
     .bind(project_number)
     .bind(request.name)
@@ -273,15 +270,15 @@ pub async fn create_project(
     .bind(request.plus_code.filter(|value| !value.trim().is_empty()))
     .bind(normalize_phone(request.phone.as_deref()))
     .bind(request.email.as_deref().map(str::trim))
-    .execute(&state.pool)
+    .fetch_one(&state.pool)
     .await?;
-    let project = sqlx::query_as::<_, ProjectSummary>(
+    let project = crate::db::query_as::< ProjectSummary>(
         "SELECT id, project_number, name, kana, address, phone, email, dealer, assignee, (SELECT phone FROM dealer_contacts c WHERE c.dealer_name = projects.dealer AND c.name = projects.assignee AND c.deleted_at IS NULL LIMIT 1) as assignee_phone, latitude, longitude, plus_code, strftime('%Y-%m-%d %H:%M:%S', updated_at, '+9 hours') AS updated_at,
          (SELECT COUNT(*) FROM files f WHERE f.project_id = projects.id AND LOWER(f.file_type) = 'document' AND f.deleted_at IS NULL) as documents_count,
          (SELECT COUNT(*) FROM files f WHERE f.project_id = projects.id AND LOWER(f.file_type) = 'picture' AND f.deleted_at IS NULL) as pictures_count
          FROM projects WHERE id = ? AND deleted_at IS NULL",
     )
-    .bind(result.last_insert_rowid())
+    .bind(project_id)
     .fetch_one(&state.pool)
     .await?;
     Ok((StatusCode::CREATED, Json(project)))
@@ -298,7 +295,7 @@ pub async fn update_project(
         .map_err(|_| ApiError::Unauthorized)?
         .ok_or(ApiError::Unauthorized)?;
     if !can_manage_projects(&user.1) {
-        let has_perm: Option<i64> = sqlx::query_scalar(
+        let has_perm: Option<i64> = crate::db::query_scalar(
             "SELECT 1 FROM project_permissions WHERE user_id = ? AND project_id = ? AND permission = 'member'",
         )
         .bind(user.0)
@@ -327,7 +324,7 @@ pub async fn update_project(
     }
 
     let duplicate: Option<i64> =
-        sqlx::query_scalar("SELECT id FROM projects WHERE project_number = ? AND id != ?")
+        crate::db::query_scalar("SELECT id FROM projects WHERE project_number = ? AND id != ?")
             .bind(&project_number)
             .bind(id)
             .fetch_optional(&state.pool)
@@ -337,7 +334,7 @@ pub async fn update_project(
     }
 
     ensure_dealer_exists(&state.pool, request.dealer.as_deref()).await?;
-    sqlx::query(
+    crate::db::query(
         "UPDATE projects SET project_number = ?, name = ?, kana = ?, address = ?, dealer = ?, assignee = ?, latitude = ?, longitude = ?, plus_code = ?, phone = ?, email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
     )
     .bind(&project_number)
@@ -355,7 +352,7 @@ pub async fn update_project(
     .execute(&state.pool)
     .await?;
 
-    let project = sqlx::query_as::<_, ProjectSummary>(
+    let project = crate::db::query_as::< ProjectSummary>(
         "SELECT id, project_number, name, kana, address, phone, email, dealer, assignee, (SELECT phone FROM dealer_contacts c WHERE c.dealer_name = projects.dealer AND c.name = projects.assignee AND c.deleted_at IS NULL LIMIT 1) as assignee_phone, latitude, longitude, plus_code, strftime('%Y-%m-%d %H:%M:%S', updated_at, '+9 hours') AS updated_at,
          (SELECT COUNT(*) FROM files f WHERE f.project_id = projects.id AND LOWER(f.file_type) = 'document' AND f.deleted_at IS NULL) as documents_count,
          (SELECT COUNT(*) FROM files f WHERE f.project_id = projects.id AND LOWER(f.file_type) = 'picture' AND f.deleted_at IS NULL) as pictures_count
@@ -381,7 +378,7 @@ pub async fn project_detail(
     headers: HeaderMap,
 ) -> Result<Json<ProjectDetail>, ApiError> {
     require_project_access(&headers, &state, id).await?;
-    let project = sqlx::query_as::<_, ProjectSummary>(
+    let project = crate::db::query_as::< ProjectSummary>(
         "SELECT id, project_number, name, kana, address, phone, email, dealer, assignee, (SELECT phone FROM dealer_contacts c WHERE c.dealer_name = projects.dealer AND c.name = projects.assignee AND c.deleted_at IS NULL LIMIT 1) as assignee_phone, latitude, longitude, plus_code, strftime('%Y-%m-%d %H:%M:%S', updated_at, '+9 hours') AS updated_at,
          (SELECT COUNT(*) FROM files f WHERE f.project_id = projects.id AND LOWER(f.file_type) = 'document' AND f.deleted_at IS NULL) as documents_count,
          (SELECT COUNT(*) FROM files f WHERE f.project_id = projects.id AND LOWER(f.file_type) = 'picture' AND f.deleted_at IS NULL) as pictures_count
@@ -391,7 +388,7 @@ pub async fn project_detail(
     .fetch_optional(&state.pool)
     .await?
     .ok_or(ApiError::NotFound)?;
-    let files = sqlx::query_as::<_, FileItem>(
+    let files = crate::db::query_as::< FileItem>(
         "SELECT id, version_number, file_name AS file_path, file_type, file_hash, source_hash, tag, file_size,
             strftime('%Y-%m-%d %H:%M:%S', created_at, '+9 hours') AS created_at FROM files
          WHERE project_id = ? AND deleted_at IS NULL ORDER BY file_path",

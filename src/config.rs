@@ -43,7 +43,7 @@ impl AppConfig {
         let database_url = env_or_setting(
             "DATABASE_URL",
             settings.database_url,
-            "sqlite:data/filemanager.db",
+            "postgres://filemanager3@127.0.0.1/filemanager3",
         );
         let storage_dir = PathBuf::from(env_or_setting(
             "FILE_STORAGE_DIR",

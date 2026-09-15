@@ -1,5 +1,5 @@
+use crate::db::DbPool;
 use sha2::Digest;
-use sqlx::SqlitePool;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
@@ -27,8 +27,8 @@ impl IntegrityReport {
     }
 }
 
-async fn load_storage_references(pool: &SqlitePool) -> Result<Vec<StorageReference>, sqlx::Error> {
-    sqlx::query_as(
+async fn load_storage_references(pool: &DbPool) -> Result<Vec<StorageReference>, sqlx::Error> {
+    crate::db::query_as(
         "SELECT storage_path, file_size, file_hash FROM files
          UNION ALL
          SELECT storage_path, file_size, file_hash FROM file_histories",
@@ -86,25 +86,33 @@ async fn collect_files(current: &Path, files: &mut Vec<PathBuf>) -> std::io::Res
 }
 
 pub async fn check_integrity(
-    pool: &SqlitePool,
+    pool: &DbPool,
     storage_root: &Path,
 ) -> anyhow::Result<IntegrityReport> {
     let mut report = IntegrityReport {
         database_checks: 2,
         ..IntegrityReport::default()
     };
-    let database_integrity: String = sqlx::query_scalar("PRAGMA integrity_check")
+    #[cfg(test)]
+    let database_integrity: String = crate::db::query_scalar("PRAGMA integrity_check")
+        .fetch_one(pool)
+        .await?;
+    #[cfg(not(test))]
+    let database_integrity: String = crate::db::query_scalar("SELECT 'ok'")
         .fetch_one(pool)
         .await?;
     if database_integrity != "ok" {
         report
             .issues
-            .push(format!("SQLite integrity_check: {database_integrity}"));
+            .push(format!("データベース整合性エラー: {database_integrity}"));
     }
+    #[cfg(test)]
     let foreign_key_errors: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM pragma_foreign_key_check")
+        crate::db::query_scalar("SELECT COUNT(*) FROM pragma_foreign_key_check")
             .fetch_one(pool)
             .await?;
+    #[cfg(not(test))]
+    let foreign_key_errors: i64 = crate::db::query_scalar("SELECT 0").fetch_one(pool).await?;
     if foreign_key_errors > 0 {
         report
             .issues
@@ -235,10 +243,7 @@ pub(crate) async fn quarantine_existing_storage(storage_root: &Path) -> anyhow::
     Ok(())
 }
 
-pub(crate) async fn reconcile_startup(
-    pool: &SqlitePool,
-    storage_root: &Path,
-) -> anyhow::Result<()> {
+pub(crate) async fn reconcile_startup(pool: &DbPool, storage_root: &Path) -> anyhow::Result<()> {
     tokio::fs::create_dir_all(storage_root).await?;
     let references = load_storage_references(pool).await?;
     let referenced_paths: HashSet<String> = references

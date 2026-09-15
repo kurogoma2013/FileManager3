@@ -43,7 +43,7 @@ Ubuntu 26.04 LTS であることを確認します。以降のコマンドは、
 sudo apt update
 sudo apt full-upgrade -y
 sudo apt install -y \
-  build-essential cargo git nginx openssl pkg-config libsqlite3-dev ufw
+  build-essential cargo git libpq-dev nginx openssl pkg-config postgresql ufw
 
 sudo adduser --system --group --home /opt/filemanager3 \
   --shell /usr/sbin/nologin filemanager3
@@ -51,9 +51,13 @@ sudo install -d -m 750 -o filemanager3 -g filemanager3 \
   /opt/filemanager3 /var/lib/filemanager3/data/storage \
   /etc/filemanager3/tls
 
+sudo -u postgres psql <<'SQL'
+CREATE USER filemanager3 WITH PASSWORD 'データベース用の強いパスワード';
+CREATE DATABASE filemanager3 OWNER filemanager3;
+SQL
 ```
 
-FileManager3はSQLiteを使用するため、別途データベースサーバーやDBユーザーを作成する必要はありません。DBファイルはサービスユーザーが書き込めるデータディレクトリへ作成します。
+FileManager3はPostgreSQLを使用します。アプリケーション用DBユーザーとDBを作成し、パスワードは環境ファイルへ安全に設定します。
 
 `filemanager3` はサービス専用ユーザーです。既に専用ユーザーを作成済みの場合は、既存のユーザー名を以降のコマンドで使用してください。
 
@@ -148,7 +152,7 @@ sudo nano /etc/filemanager3/filemanager3.env
 ```
 
 ```text
-DATABASE_URL=sqlite:/var/lib/filemanager3/data/filemanager.db
+DATABASE_URL=postgres://filemanager3:データベース用の強いパスワード@127.0.0.1/filemanager3
 FILE_STORAGE_DIR=./data/storage
 HOST=127.0.0.1
 PORT=3000
@@ -162,7 +166,7 @@ WEBAUTHN_ORIGIN=https://goma2013.com
 
 `WEBAUTHN_RP_ID` と `WEBAUTHN_ORIGIN` には、利用者がブラウザで開く公開ドメインを設定します。`localhost` や `:3000` は設定しません。
 
-初回起動時は、SQLiteのDBファイルに `admin` ユーザーが作成されます。既存DBの管理者パスワードは起動時に上書きされません。
+初回起動時は、空のPostgreSQLデータベースに `admin` ユーザーが作成されます。既存DBの管理者パスワードは起動時に上書きされません。
 
 環境ファイルの権限を制限します。
 
@@ -377,11 +381,11 @@ sudo journalctl -u filemanager3 -n 100 --no-pager
 
 ## 13. 更新時の手順
 
-新しいバージョンを配置する場合は、まずSQLite DBファイルとストレージを同一更新単位で保存し、ソースコードを更新してビルドした後、サービスを再起動します。バックアップ先はアクセス制限した保存先を使用してください。
+新しいバージョンを配置する場合は、まずPostgreSQLのダンプとストレージを同一更新単位で保存し、ソースコードを更新してビルドした後、サービスを再起動します。バックアップ先はアクセス制限した保存先を使用してください。
 
 ```bash
 sudo install -d -m 750 /var/backups/filemanager3
-sudo cp -p /var/lib/filemanager3/data/filemanager.db /var/backups/filemanager3/filemanager3.db
+sudo -u filemanager3 pg_dump --format=custom --file=/var/backups/filemanager3/database.dump filemanager3
 sudo tar -C /var/lib/filemanager3/data -czf /var/backups/filemanager3/storage.tar.gz storage
 sudo systemctl stop filemanager3
 sudo -u filemanager3 git -C /opt/filemanager3/source pull --ff-only

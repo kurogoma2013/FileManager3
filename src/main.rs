@@ -22,8 +22,6 @@ use config::AppConfig;
 use models::AppState;
 use network::{local_lan_ip, webui_urls};
 use routes::create_app;
-#[cfg(test)]
-use sqlx::sqlite::SqlitePool;
 use std::env;
 use std::net::SocketAddr;
 #[cfg(test)]

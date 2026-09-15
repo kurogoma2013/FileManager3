@@ -25,7 +25,7 @@ pub const PROJECT_RESULTS_HTML: &str = INDEX_HTML;
 pub const DETAIL_HTML: &str = include_str!("templates/detail.html");
 
 pub const HELP_HTML: &str = include_str!("templates/help.html");
-pub const APP_VERSION: &str = "v20260915.00";
+pub const APP_VERSION: &str = "v20260915.01";
 
 const MOBILE_LIST_STYLES: &str = r#"<style>
 .mobile-search-sort{display:none}
@@ -137,6 +137,7 @@ const FILE_AUDIT_SCRIPT: &str = r#"<script>
 
 pub fn render_page(html: &str) -> String {
     html.replace("v20260915.00", APP_VERSION)
+        .replace("v20260915.01", APP_VERSION)
         .replace("<body>", "<body class=\"app-page\">")
         .replace("</head>", MOBILE_LIST_STYLES)
         .replace(

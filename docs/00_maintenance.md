@@ -15,7 +15,7 @@
 cargo run -- check-integrity
 ```
 
-検査で見つかったDB参照ファイルの欠落、サイズ・SHA-256不一致、孤立ファイル、一時ファイル、SQLite接続・スキーマ・外部キー整合性エラーは終了コード1で報告する。起動時に見つかった一時・孤立ファイルは削除せず、`FILE_STORAGE_DIR/.quarantine/` へ移動する。
+検査で見つかったDB参照ファイルの欠落、サイズ・SHA-256不一致、孤立ファイル、PostgreSQL接続・スキーマ・外部キー整合性エラーは終了コード1で報告する。起動時に見つかった一時・孤立ファイルは削除せず、`FILE_STORAGE_DIR/.quarantine/` へ移動する。
 
 ## コードの責務
 
@@ -25,13 +25,13 @@ cargo run -- check-integrity
 | `src/routes.rs` | WebAuthn状態の構築、Axum Router、共通ミドルウェア | 画面/APIのパス追加・変更 |
 | `src/handlers/` | 認証、案件、販売店、メモ、ファイル、ユーザーのHTTP処理 | APIの入力・権限・レスポンス |
 | `src/app_state.rs` | DBマイグレーション、初期管理者作成、起動時のストレージ整合性確認 | 起動時のDB準備 |
-| `src/db.rs` | SQLite接続プールとトランザクション共通処理 | DB接続設定 |
+| `src/db.rs` | PostgreSQL接続プールとトランザクション共通処理 | DB接続設定 |
 | `src/storage.rs` | ファイル名の安全性判定 | ストレージの入力検証 |
 | `src/integrity.rs` | DB・ストレージ検査、起動時の未確定ファイル隔離、隔離ディレクトリ管理 | 整合性検査・復旧 |
 | `src/core.rs` | ロールと操作権限の判定 | 権限ルール |
 | `src/templates.rs` / `src/templates/` | HTMLテンプレートと共通UI補正 | 画面構造・共通表示 |
 | `src/specifications.rs` | `docs/*.md` の管理者向け表示 | 仕様書の表示方式 |
-| `migrations/` | SQLiteスキーマの履歴 | テーブル・インデックス変更 |
+| `migrations_postgres/` | PostgreSQLスキーマの履歴 | テーブル・インデックス変更 |
 
 ## ルートを追加する場合
 

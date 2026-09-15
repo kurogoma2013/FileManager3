@@ -2,6 +2,7 @@ use super::*;
 use crate::core::{
     can_delete_user_target, can_edit_user, can_manage_projects, can_move_file, can_upload_files,
 };
+use crate::db::DbPool;
 use crate::models::ApiError;
 use axum::body::to_bytes;
 use axum::http::{header, HeaderMap, HeaderValue, Request};
@@ -13,12 +14,25 @@ use handlers::projects::{
 };
 use handlers::users::valid_user_role;
 use sha2::{Digest, Sha256};
+use sqlx::sqlite::SqlitePoolOptions;
 use std::path::PathBuf;
+use std::sync::Once;
 use templates::{
-    detail_page, ADMIN_HTML, ADMIN_PROJECTS_HTML, DEALER_REGISTRATION_HTML, DETAIL_HTML, HELP_HTML,
-    INDEX_HTML, LOGIN_HTML, PROJECT_RESULTS_HTML, USER_REGISTRATION_HTML,
+    detail_page, render_page, ADMIN_HTML, ADMIN_PROJECTS_HTML, DEALER_REGISTRATION_HTML,
+    DETAIL_HTML, HELP_HTML, INDEX_HTML, LOGIN_HTML, PROJECT_RESULTS_HTML, USER_REGISTRATION_HTML,
 };
 use tower::ServiceExt;
+
+static DB_DRIVERS: Once = Once::new();
+
+async fn test_pool() -> DbPool {
+    DB_DRIVERS.call_once(|| {});
+    SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect("sqlite::memory:")
+        .await
+        .unwrap()
+}
 
 fn multipart_upload_body(
     boundary: &str,
@@ -47,8 +61,8 @@ fn multipart_upload_body(
     body
 }
 
-async fn upload_test_app(storage_prefix: &str) -> (Router, SqlitePool, PathBuf, String) {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+async fn upload_test_app(storage_prefix: &str) -> (Router, DbPool, PathBuf, String) {
+    let pool = test_pool().await;
     let storage_dir = PathBuf::from(format!(
         "./target/{storage_prefix}-{}",
         uuid::Uuid::new_v4()
@@ -151,7 +165,7 @@ async fn post_upload_item(
 
 #[tokio::test]
 async fn トップページ用ログイン画面を表示できる() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_index"),
@@ -334,7 +348,7 @@ fn ユーザー管理画面にownerロールを表示しない() {
 
 #[tokio::test]
 async fn 管理ユーザーは管理者以外から削除できない() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_admin_delete_guard"),
@@ -382,7 +396,7 @@ async fn 管理ユーザーは管理者以外から削除できない() {
 
 #[tokio::test]
 async fn viewerは自分のユーザー情報だけ編集できる() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_viewer_user_edit"),
@@ -495,7 +509,7 @@ fn データベース整合性対策を適用する() {
 
 #[test]
 fn ログイン画面はユーザー名入力後にパスキー認証を開始する() {
-    assert!(LOGIN_HTML.contains("v20260915.00"));
+    assert!(render_page(LOGIN_HTML).contains("v20260915.01"));
     assert!(LOGIN_HTML.contains("startPasskeyLogin(true)"));
     assert!(LOGIN_HTML.contains("autoPasskeyLogin"));
     assert!(!LOGIN_HTML.contains("has_passkey"));
@@ -592,7 +606,7 @@ fn 画面にlanとホスト名の接続先を表示しない() {
         USER_REGISTRATION_HTML,
         DETAIL_HTML,
     ] {
-        assert!(html.contains("v20260915.00"));
+        assert!(render_page(html).contains("v20260915.01"));
         assert!(html.contains("/* ui-consistency */"));
         assert!(html.contains("--ui-radius:8px"));
         assert!(html.contains(".table th,.table td{padding:12px 14px}"));
@@ -634,7 +648,7 @@ fn 画面にlanとホスト名の接続先を表示しない() {
 
 #[tokio::test]
 async fn lanとモバイル用アドレスapiを取得できる() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_access_urls"),
@@ -1185,7 +1199,7 @@ fn 未認証エラーはブラウザ標準ログインダイアログを要求�
 
 #[tokio::test]
 async fn ログアウトはログイン画面へ戻す() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let state = Arc::new(AppState {
         pool,
         storage_root: PathBuf::from("./target/test_storage_logout"),
@@ -1221,7 +1235,7 @@ async fn ログアウトはログイン画面へ戻す() {
 
 #[tokio::test]
 async fn ウィンドウ終了用ログアウトは更新用の短い猶予を設定する() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_logout_on_close"),
@@ -1307,7 +1321,7 @@ async fn セッションcookieからトークンを取得できる() {
 
 #[tokio::test]
 async fn settings_jsonの読み込みとデフォルト作成が正常に機能する() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_settings"),
@@ -1325,7 +1339,7 @@ async fn settings_jsonの読み込みとデフォルト作成が正常に機能�
 
 #[tokio::test]
 async fn 管理者パスワードは起動時に上書きされない() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config1 = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_sync1"),
@@ -1359,7 +1373,7 @@ async fn 管理者パスワードは起動時に上書きされない() {
 
 #[tokio::test]
 async fn 販売店登録と重複防止が正常に動作する() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_dealers"),
@@ -1387,7 +1401,7 @@ async fn 販売店登録と重複防止が正常に動作する() {
 
 #[tokio::test]
 async fn 販売店一覧は登録件数を返す() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_dealer_count"),
@@ -1519,7 +1533,7 @@ async fn 案件検索画面のメニューと入力形式が要件どおりで�
 #[tokio::test]
 #[allow(non_snake_case)]
 async fn 単一テキストボックスのキーワード検索と複数語AND検索が動作する() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_single_search"),
@@ -1897,7 +1911,7 @@ fn 詳細画面には案件詳細を含むタブがある() {
 
 #[tokio::test]
 async fn 案件と販売店は論理削除で一覧対象から除外される() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_softdelete"),
@@ -1986,7 +2000,7 @@ async fn 案件と販売店は論理削除で一覧対象から除外される()
 
 #[tokio::test]
 async fn 整合性検査はデータベースとストレージの不一致を検出する() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let storage_dir = PathBuf::from(format!(
         "./target/test_storage_integrity_check-{}",
         uuid::Uuid::new_v4()
@@ -2032,7 +2046,7 @@ async fn 整合性検査はデータベースとストレージの不一致を�
 
 #[tokio::test]
 async fn 起動時に未確定ストレージを隔離する() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let storage_dir = PathBuf::from(format!(
         "./target/test_storage_startup_quarantine-{}",
         uuid::Uuid::new_v4()
@@ -2070,7 +2084,7 @@ async fn 起動時に未確定ストレージを隔離する() {
 
 #[tokio::test]
 async fn 物理削除前にファイルを隔離してからデータベースを削除する() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let storage_dir = PathBuf::from(format!(
         "./target/test_storage_delete_quarantine-{}",
         uuid::Uuid::new_v4()
@@ -2122,7 +2136,7 @@ async fn 物理削除前にファイルを隔離してからデータベース�
 
 #[tokio::test]
 async fn ユーザー更新日時は初期管理者の登録時に保存する() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_user_updated_at"),
@@ -2143,7 +2157,7 @@ async fn ユーザー更新日時は初期管理者の登録時に保存する()
 
 #[tokio::test]
 async fn ログインユーザー情報を取得できる() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_me"),
@@ -2165,7 +2179,7 @@ async fn ログインユーザー情報を取得できる() {
 
 #[tokio::test]
 async fn 案件と販売店にメモを追加および履歴が取得できる() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_notes"),
@@ -2220,7 +2234,7 @@ async fn 案件と販売店にメモを追加および履歴が取得できる()
 
 #[tokio::test]
 async fn 案件メモの追加で案件更新日時を更新する() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_note_updated_at"),
@@ -2282,7 +2296,7 @@ async fn 案件メモの追加で案件更新日時を更新する() {
 #[tokio::test]
 async fn 案件登録および更新時に未登録の販売店が自動追加される() {
     let _ = tracing_subscriber::fmt::try_init();
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_autodealer"),
@@ -2366,7 +2380,7 @@ async fn 案件登録および更新時に未登録の販売店が自動追加�
 
 #[tokio::test]
 async fn 販売店登録でカナを保存および更新できる() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_dealer_kana"),
@@ -2575,7 +2589,7 @@ fn 新規db初期化時にストレージを隔離する処理がある() {
 
 #[tokio::test]
 async fn 案件検索結果画面を認証済みで表示できる() {
-    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let pool = test_pool().await;
     let config = AppConfig {
         database_url: "sqlite::memory:".to_string(),
         storage_dir: PathBuf::from("./target/test_storage_projects_page"),

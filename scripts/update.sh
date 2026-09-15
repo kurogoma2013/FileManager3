@@ -33,37 +33,26 @@ run_as_app_user() {
 }
 
 backup_data() {
-  local timestamp database_file storage_dir backup_root backup_file storage_archive sidecar
+  local timestamp database_name storage_dir backup_root backup_file storage_archive
   timestamp="$(date '+%Y%m%d-%H%M%S')"
-  database_file="${FILEMANAGER_DATABASE_FILE:-$DATA_DIR/filemanager.db}"
+  database_name="${FILEMANAGER_DB_NAME:-filemanager3}"
   storage_dir="${FILEMANAGER_STORAGE_DIR:-$DATA_DIR/storage}"
-  [ -f "$database_file" ] || fail "データベースが見つかりません: $database_file"
   [ -d "$storage_dir" ] || fail "ストレージが見つかりません: $storage_dir"
 
   install -d -m 750 "$BACKUP_DIR"
   backup_root="$BACKUP_DIR/filemanager3-${timestamp}"
   install -d -m 750 "$backup_root"
-  backup_file="$backup_root/filemanager3.db"
-  cp -p "$database_file" "$backup_file"
-  for sidecar in "${database_file}-wal" "${database_file}-shm"; do
-    if [ -f "$sidecar" ]; then
-      cp -p "$sidecar" "$backup_root/$(basename "$sidecar")"
-    fi
-  done
+  backup_file="$backup_root/database.dump"
+  run_as_app_user pg_dump --format=custom --file="$backup_file" "$database_name"
   storage_archive="$backup_root/storage.tar.gz"
   tar -C "$storage_dir" -czf "$storage_archive" .
   {
     printf 'バックアップ日時: %s\n' "$timestamp"
     printf 'コミット: %s\n' "$(git rev-parse HEAD)"
-    printf 'データベース: %s\n' "$database_file"
+    printf 'データベース: %s\n' "$database_name"
     printf 'ストレージ: %s\n' "$storage_dir"
   } > "$backup_root/metadata.txt"
-  sha256sum "$backup_root/filemanager3.db" "$storage_archive" > "$backup_root/manifest.sha256"
-  for sidecar in "$backup_root/filemanager3.db-wal" "$backup_root/filemanager3.db-shm"; do
-    if [ -f "$sidecar" ]; then
-      sha256sum "$sidecar" >> "$backup_root/manifest.sha256"
-    fi
-  done
+  sha256sum "$backup_file" "$storage_archive" > "$backup_root/manifest.sha256"
   log "データベースとストレージをバックアップしました: $backup_root"
 }
 
@@ -71,6 +60,7 @@ require_command cargo
 require_command curl
 require_command git
 require_command install
+require_command pg_dump
 require_command runuser
 require_command sha256sum
 require_command systemctl

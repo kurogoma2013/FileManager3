@@ -1,7 +1,7 @@
+use crate::db::DbPool;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
-use sqlx::sqlite::SqlitePool;
 use std::path::PathBuf;
 use std::sync::Arc;
 use webauthn_rs::prelude::*;
@@ -11,7 +11,7 @@ pub const SESSION_MAX_AGE_SECONDS: i64 = 60 * 60;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub pool: SqlitePool,
+    pub pool: DbPool,
     pub storage_root: PathBuf,
     pub access_urls: Vec<String>,
     pub webauthn: Arc<Webauthn>,
