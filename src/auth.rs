@@ -18,8 +18,8 @@ pub async fn authenticate_credentials(
     username: &str,
     password: &str,
 ) -> anyhow::Result<Option<(i64, String)>> {
-    let row: Option<(i64, String, String)> = crate::db::query_as(
-        "SELECT id, password_hash, role FROM users WHERE username = ? AND active = 1",
+    let row: Option<(i64, String, String)> = sqlx::query_as(
+        "SELECT id, password_hash, role FROM users WHERE username = $1 AND active = 1",
     )
     .bind(username)
     .fetch_optional(pool)

@@ -1,1 +1,0 @@
-ALTER TABLE dealer_contacts ADD COLUMN email TEXT NOT NULL DEFAULT '';

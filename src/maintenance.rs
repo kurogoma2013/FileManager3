@@ -14,8 +14,8 @@ pub(crate) async fn storage_operation_guard() -> tokio::sync::MutexGuard<'static
 }
 
 pub(crate) async fn soft_delete_project(pool: &DbPool, id: i64) -> Result<u64, sqlx::Error> {
-    let result = crate::db::query(
-        "UPDATE projects SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL",
+    let result = sqlx::query(
+        "UPDATE projects SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND deleted_at IS NULL",
     )
     .bind(id)
     .execute(pool)
@@ -24,8 +24,8 @@ pub(crate) async fn soft_delete_project(pool: &DbPool, id: i64) -> Result<u64, s
 }
 
 pub(crate) async fn soft_delete_dealer(pool: &DbPool, id: i64) -> Result<u64, sqlx::Error> {
-    let result = crate::db::query(
-        "UPDATE dealers SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL",
+    let result = sqlx::query(
+        "UPDATE dealers SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1 AND deleted_at IS NULL",
     )
     .bind(id)
     .execute(pool)
@@ -34,8 +34,8 @@ pub(crate) async fn soft_delete_dealer(pool: &DbPool, id: i64) -> Result<u64, sq
 }
 
 pub(crate) async fn restore_project(pool: &DbPool, id: i64) -> Result<u64, sqlx::Error> {
-    let result = crate::db::query(
-        "UPDATE projects SET deleted_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NOT NULL",
+    let result = sqlx::query(
+        "UPDATE projects SET deleted_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND deleted_at IS NOT NULL",
     )
     .bind(id)
     .execute(pool)
@@ -44,8 +44,8 @@ pub(crate) async fn restore_project(pool: &DbPool, id: i64) -> Result<u64, sqlx:
 }
 
 pub(crate) async fn restore_dealer(pool: &DbPool, id: i64) -> Result<u64, sqlx::Error> {
-    let result = crate::db::query(
-        "UPDATE dealers SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL",
+    let result = sqlx::query(
+        "UPDATE dealers SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL",
     )
     .bind(id)
     .execute(pool)
@@ -59,9 +59,9 @@ pub(crate) async fn permanently_delete_project(
     id: i64,
 ) -> Result<u64, ApiError> {
     let _storage_guard = storage_operation_guard().await;
-    let storage_paths: Vec<String> = crate::db::query_scalar(
-        "SELECT storage_path FROM files WHERE project_id = ?
-         UNION SELECT storage_path FROM file_histories WHERE project_id = ?",
+    let storage_paths: Vec<String> = sqlx::query_scalar(
+        "SELECT storage_path FROM files WHERE project_id = $1
+         UNION SELECT storage_path FROM file_histories WHERE project_id = $2",
     )
     .bind(id)
     .bind(id)
@@ -71,18 +71,17 @@ pub(crate) async fn permanently_delete_project(
         quarantine_unreferenced_storage_files(pool, storage_root, storage_paths, None, Some(id))
             .await?;
     let mut transaction = pool.begin().await?;
-    let result =
-        match crate::db::query("DELETE FROM projects WHERE id = ? AND deleted_at IS NOT NULL")
-            .bind(id)
-            .execute(&mut *transaction)
-            .await
-        {
-            Ok(result) => result,
-            Err(error) => {
-                restore_quarantined_storage(&quarantined).await;
-                return Err(error.into());
-            }
-        };
+    let result = match sqlx::query("DELETE FROM projects WHERE id = $1 AND deleted_at IS NOT NULL")
+        .bind(id)
+        .execute(&mut *transaction)
+        .await
+    {
+        Ok(result) => result,
+        Err(error) => {
+            restore_quarantined_storage(&quarantined).await;
+            return Err(error.into());
+        }
+    };
     if result.rows_affected() == 0 {
         restore_quarantined_storage(&quarantined).await;
         return Ok(0);
@@ -95,7 +94,7 @@ pub(crate) async fn permanently_delete_project(
 }
 
 pub(crate) async fn permanently_delete_dealer(pool: &DbPool, id: i64) -> Result<u64, sqlx::Error> {
-    let result = crate::db::query("DELETE FROM dealers WHERE id = ? AND deleted_at IS NOT NULL")
+    let result = sqlx::query("DELETE FROM dealers WHERE id = $1 AND deleted_at IS NOT NULL")
         .bind(id)
         .execute(pool)
         .await?;
@@ -115,11 +114,11 @@ async fn is_referenced_outside_target(
 ) -> Result<bool, sqlx::Error> {
     match (excluded_file_id, excluded_project_id) {
         (Some(file_id), None) => {
-            crate::db::query_scalar(
+            sqlx::query_scalar(
                 "SELECT EXISTS(
-                    SELECT 1 FROM files WHERE storage_path = ? AND id != ?
+                    SELECT 1 FROM files WHERE storage_path = $1 AND id != $2
                     UNION ALL
-                    SELECT 1 FROM file_histories WHERE storage_path = ? AND file_id != ?
+                    SELECT 1 FROM file_histories WHERE storage_path = $3 AND file_id != $4
                 )",
             )
             .bind(storage_path)
@@ -130,11 +129,11 @@ async fn is_referenced_outside_target(
             .await
         }
         (None, Some(project_id)) => {
-            crate::db::query_scalar(
+            sqlx::query_scalar(
                 "SELECT EXISTS(
-                    SELECT 1 FROM files WHERE storage_path = ? AND project_id != ?
+                    SELECT 1 FROM files WHERE storage_path = $1 AND project_id != $2
                     UNION ALL
-                    SELECT 1 FROM file_histories WHERE storage_path = ? AND project_id != ?
+                    SELECT 1 FROM file_histories WHERE storage_path = $3 AND project_id != $4
                 )",
             )
             .bind(storage_path)
@@ -145,11 +144,11 @@ async fn is_referenced_outside_target(
             .await
         }
         (None, None) => {
-            crate::db::query_scalar(
+            sqlx::query_scalar(
                 "SELECT EXISTS(
-                    SELECT 1 FROM files WHERE storage_path = ?
+                    SELECT 1 FROM files WHERE storage_path = $1
                     UNION ALL
-                    SELECT 1 FROM file_histories WHERE storage_path = ?
+                    SELECT 1 FROM file_histories WHERE storage_path = $2
                 )",
             )
             .bind(storage_path)
@@ -242,9 +241,9 @@ pub(crate) async fn permanently_delete_file(
     id: i64,
 ) -> Result<u64, ApiError> {
     let _storage_guard = storage_operation_guard().await;
-    let storage_paths: Vec<String> = crate::db::query_scalar(
-        "SELECT storage_path FROM files WHERE id = ?
-         UNION SELECT storage_path FROM file_histories WHERE file_id = ?",
+    let storage_paths: Vec<String> = sqlx::query_scalar(
+        "SELECT storage_path FROM files WHERE id = $1
+         UNION SELECT storage_path FROM file_histories WHERE file_id = $2",
     )
     .bind(id)
     .bind(id)
@@ -254,7 +253,7 @@ pub(crate) async fn permanently_delete_file(
         quarantine_unreferenced_storage_files(pool, storage_root, storage_paths, Some(id), None)
             .await?;
     let mut transaction = pool.begin().await?;
-    let result = match crate::db::query("DELETE FROM files WHERE id = ? AND deleted_at IS NOT NULL")
+    let result = match sqlx::query("DELETE FROM files WHERE id = $1 AND deleted_at IS NOT NULL")
         .bind(id)
         .execute(&mut *transaction)
         .await
@@ -279,8 +278,8 @@ pub(crate) async fn permanently_delete_file(
 pub(crate) async fn list_deleted_projects(
     pool: &DbPool,
 ) -> Result<Vec<ProjectTrashItem>, sqlx::Error> {
-    crate::db::query_as(
-        "SELECT id, project_number, name, kana, address, phone, email, dealer, assignee, (SELECT phone FROM dealer_contacts c WHERE c.dealer_name = projects.dealer AND c.name = projects.assignee AND c.deleted_at IS NULL LIMIT 1) as assignee_phone, latitude, longitude, plus_code, strftime('%Y-%m-%d %H:%M:%S', deleted_at, '+9 hours') as deleted_at
+    sqlx::query_as(
+        "SELECT id, project_number, name, kana, address, phone, email, dealer, assignee, (SELECT phone FROM dealer_contacts c WHERE c.dealer_name = projects.dealer AND c.name = projects.assignee AND c.deleted_at IS NULL LIMIT 1) as assignee_phone, latitude, longitude, plus_code, to_char(deleted_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS') as deleted_at
          FROM projects
          WHERE deleted_at IS NOT NULL
          ORDER BY deleted_at DESC, id DESC",
@@ -292,8 +291,8 @@ pub(crate) async fn list_deleted_projects(
 pub(crate) async fn list_deleted_dealers(
     pool: &DbPool,
 ) -> Result<Vec<DealerTrashItem>, sqlx::Error> {
-    crate::db::query_as(
-        "SELECT id, name, kana, address, phone, fax, email, strftime('%Y-%m-%d %H:%M:%S', deleted_at, '+9 hours') as deleted_at
+    sqlx::query_as(
+        "SELECT id, name, kana, address, phone, fax, email, to_char(deleted_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS') as deleted_at
          FROM dealers
          WHERE deleted_at IS NOT NULL
          ORDER BY deleted_at DESC, id DESC",

@@ -27,6 +27,15 @@ docker compose ps
 docker compose exec filemanager3-postgres pg_isready -U filemanager3 -d filemanager3
 ```
 
+## スキーマ更新時の再作成
+
+スキーマを `migrations/20260917000000_init.sql` に統合したため、それ以前のマイグレーション履歴を持つデータベースはそのまま使用できません。開発用DBはボリュームごと削除して作り直します。
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
 ## 停止
 
 ```bash

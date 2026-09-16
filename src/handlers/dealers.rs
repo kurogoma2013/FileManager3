@@ -15,7 +15,7 @@ use std::sync::Arc;
 pub async fn list_dealers(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<Dealer>>, ApiError> {
-    let dealers: Vec<Dealer> = crate::db::query_as(
+    let dealers: Vec<Dealer> = sqlx::query_as(
         "SELECT d.id, d.name, d.kana, d.address, d.phone, d.fax, d.email, COUNT(p.id) AS project_count
          FROM dealers d
          LEFT JOIN projects p ON p.dealer = d.name AND p.deleted_at IS NULL
@@ -51,8 +51,8 @@ pub async fn create_dealer(
     let fax = normalize_phone(request.fax.as_deref()).unwrap_or_default();
     let email = request.email.as_deref().unwrap_or("").trim();
 
-    let result = crate::db::query_scalar::< i64>(
-        "INSERT INTO dealers (name, kana, address, phone, fax, email) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+    let result = sqlx::query_scalar::<_,  i64>(
+        "INSERT INTO dealers (name, kana, address, phone, fax, email) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
     )
     .bind(name)
     .bind(&kana)
@@ -110,7 +110,7 @@ pub async fn update_dealer(
 
     let mut transaction = state.pool.begin().await?;
     let old_name: Option<String> =
-        crate::db::query_scalar("SELECT name FROM dealers WHERE id = ? AND deleted_at IS NULL")
+        sqlx::query_scalar("SELECT name FROM dealers WHERE id = $1 AND deleted_at IS NULL")
             .bind(id)
             .fetch_optional(&mut *transaction)
             .await?;
@@ -118,8 +118,8 @@ pub async fn update_dealer(
         return Err(ApiError::NotFound);
     };
 
-    let result = crate::db::query(
-        "UPDATE dealers SET name = ?, kana = ?, address = ?, phone = ?, fax = ?, email = ? WHERE id = ? AND deleted_at IS NULL",
+    let result = sqlx::query(
+        "UPDATE dealers SET name = $1, kana = $2, address = $3, phone = $4, fax = $5, email = $6 WHERE id = $7 AND deleted_at IS NULL",
     )
     .bind(name)
     .bind(&kana)
@@ -134,20 +134,20 @@ pub async fn update_dealer(
     match result {
         Ok(res) if res.rows_affected() == 0 => Err(ApiError::NotFound),
         Ok(_) => {
-            crate::db::query(
-                "UPDATE projects SET dealer = ?, updated_at = CURRENT_TIMESTAMP WHERE dealer = ?",
+            sqlx::query(
+                "UPDATE projects SET dealer = $1, updated_at = CURRENT_TIMESTAMP WHERE dealer = $2",
             )
             .bind(name)
             .bind(&old_name)
             .execute(&mut *transaction)
             .await?;
-            crate::db::query("UPDATE dealer_contacts SET dealer_name = ? WHERE dealer_name = ?")
+            sqlx::query("UPDATE dealer_contacts SET dealer_name = $1 WHERE dealer_name = $2")
                 .bind(name)
                 .bind(&old_name)
                 .execute(&mut *transaction)
                 .await?;
-            let project_count: i64 = crate::db::query_scalar(
-                "SELECT COUNT(*) FROM projects WHERE dealer = ? AND deleted_at IS NULL",
+            let project_count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM projects WHERE dealer = $1 AND deleted_at IS NULL",
             )
             .bind(name)
             .fetch_one(&mut *transaction)
@@ -244,8 +244,8 @@ pub async fn list_dealer_contacts(
     if user.1 == "viewer" {
         return Err(ApiError::Forbidden);
     }
-    let contacts: Vec<DealerContact> = crate::db::query_as(
-        "SELECT id, dealer_name, name, phone, email FROM dealer_contacts WHERE dealer_name = ? AND deleted_at IS NULL ORDER BY created_at ASC"
+    let contacts: Vec<DealerContact> = sqlx::query_as(
+        "SELECT id, dealer_name, name, phone, email FROM dealer_contacts WHERE dealer_name = $1 AND deleted_at IS NULL ORDER BY created_at ASC"
     )
     .bind(dealer_name)
     .fetch_all(&state.pool)
@@ -264,7 +264,7 @@ pub async fn create_dealer_contact(
         return Err(ApiError::Forbidden);
     }
     let dealer_exists: Option<i64> =
-        crate::db::query_scalar("SELECT id FROM dealers WHERE name = ? AND deleted_at IS NULL")
+        sqlx::query_scalar("SELECT id FROM dealers WHERE name = $1 AND deleted_at IS NULL")
             .bind(&dealer_name)
             .fetch_optional(&state.pool)
             .await?;
@@ -276,8 +276,8 @@ pub async fn create_dealer_contact(
         return Err(ApiError::BadRequest("担当者名を入力してください"));
     }
     let email = payload.email.as_deref().unwrap_or("").trim();
-    crate::db::query(
-        "INSERT INTO dealer_contacts (dealer_name, name, phone, email) VALUES (?, ?, ?, ?)",
+    sqlx::query(
+        "INSERT INTO dealer_contacts (dealer_name, name, phone, email) VALUES ($1, $2, $3, $4)",
     )
     .bind(dealer_name)
     .bind(name)
@@ -294,7 +294,7 @@ pub async fn delete_dealer_contact(
     headers: HeaderMap,
 ) -> Result<StatusCode, ApiError> {
     authenticate_admin(&state, &headers).await?;
-    let rows = crate::db::query("UPDATE dealer_contacts SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL")
+    let rows = sqlx::query("UPDATE dealer_contacts SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1 AND deleted_at IS NULL")
         .bind(id)
         .execute(&state.pool)
         .await?
@@ -312,7 +312,7 @@ pub async fn permanently_delete_dealer_contact(
 ) -> Result<StatusCode, ApiError> {
     authenticate_admin(&state, &headers).await?;
     let result =
-        crate::db::query("DELETE FROM dealer_contacts WHERE id = ? AND deleted_at IS NOT NULL")
+        sqlx::query("DELETE FROM dealer_contacts WHERE id = $1 AND deleted_at IS NOT NULL")
             .bind(id)
             .execute(&state.pool)
             .await?;
@@ -335,8 +335,8 @@ pub async fn update_dealer_contact(
     if name.is_empty() {
         return Err(ApiError::BadRequest("担当者名を入力してください"));
     }
-    let rows = crate::db::query(
-        "UPDATE dealer_contacts SET name = ?, phone = ?, email = ? WHERE id = ? AND deleted_at IS NULL",
+    let rows = sqlx::query(
+        "UPDATE dealer_contacts SET name = $1, phone = $2, email = $3 WHERE id = $4 AND deleted_at IS NULL",
     )
     .bind(name)
     .bind(phone)

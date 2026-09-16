@@ -85,7 +85,7 @@ async fn test_pool() -> DbPool {
     let mut cleanup = false;
     STALE_TEST_DATABASES.call_once(|| cleanup = true);
     if cleanup {
-        let names: Vec<String> = crate::db::query_scalar(
+        let names: Vec<String> = sqlx::query_scalar(
             "SELECT datname FROM pg_database WHERE datname LIKE 'filemanager3_test_%'",
         )
         .fetch_all(&admin)
@@ -98,7 +98,7 @@ async fn test_pool() -> DbPool {
                 .and_then(|value| value.parse::<u64>().ok())
                 .unwrap_or(0);
             if created + 3600 < now {
-                let _ = crate::db::query(&format!("DROP DATABASE IF EXISTS \"{name}\""))
+                let _ = sqlx::query(&format!("DROP DATABASE IF EXISTS \"{name}\""))
                     .execute(&admin)
                     .await;
             }
@@ -108,7 +108,7 @@ async fn test_pool() -> DbPool {
         "{TEST_DATABASE_PREFIX}{now}_{}",
         uuid::Uuid::new_v4().simple()
     );
-    crate::db::query(&format!("CREATE DATABASE \"{name}\""))
+    sqlx::query(&format!("CREATE DATABASE \"{name}\""))
         .execute(&admin)
         .await
         .unwrap();
@@ -162,15 +162,15 @@ async fn upload_test_app(storage_prefix: &str) -> (Router, DbPool, PathBuf, Stri
         secure_cookie: false,
     };
     let app = create_app(pool.clone(), &config).await.unwrap();
-    crate::db::query(
+    sqlx::query(
         "INSERT INTO projects (project_number, name, kana) VALUES ('UP001', 'アップロード案件', 'アップロードアンケン')",
     )
     .execute(&pool)
     .await
     .unwrap();
     let token = format!("upload-session-{}", uuid::Uuid::new_v4());
-    crate::db::query(
-        "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, 1, datetime('now', '+1 hours'))",
+    sqlx::query(
+        "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, 1, CURRENT_TIMESTAMP + INTERVAL '1 hours')",
     )
     .bind(handlers::auth_handlers::hash_session_token(&token))
     .execute(&pool)
@@ -306,7 +306,7 @@ fn 無操作1時間で自動ログアウトし操作中はセッションを延�
     let auth = include_str!("handlers/auth_handlers.rs");
     let routes = include_str!("routes.rs");
     let rendered = templates::render_page(INDEX_HTML);
-    assert!(auth.contains("datetime('now', '+1 hour')"));
+    assert!(auth.contains("CURRENT_TIMESTAMP + INTERVAL '1 hour'"));
     assert!(auth.contains("pub async fn keepalive"));
     assert!(routes.contains("/api/session/keepalive"));
     assert!(auth.contains("session_expires_at"));
@@ -354,12 +354,22 @@ fn 日時表示は日本時間への変換を使用する() {
     let maintenance = include_str!("maintenance.rs");
     let auth = include_str!("handlers/auth_handlers.rs");
 
-    assert!(projects.contains("strftime('%Y-%m-%d %H:%M:%S', updated_at, '+9 hours')"));
-    assert!(notes.contains("strftime('%Y-%m-%d %H:%M:%S', pn.created_at, '+9 hours')"));
-    assert!(notes.contains("strftime('%Y-%m-%d %H:%M:%S', dn.created_at, '+9 hours')"));
-    assert!(users.contains("strftime('%Y-%m-%d %H:%M:%S', users.updated_at, '+9 hours')"));
-    assert!(maintenance.contains("strftime('%Y-%m-%d %H:%M:%S', deleted_at, '+9 hours')"));
-    assert!(auth.contains("strftime('%Y-%m-%dT%H:%M:%S+09:00', expires_at, '+9 hours')"));
+    assert!(
+        projects.contains("to_char(updated_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS')")
+    );
+    assert!(
+        notes.contains("to_char(pn.created_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS')")
+    );
+    assert!(
+        notes.contains("to_char(dn.created_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS')")
+    );
+    assert!(users
+        .contains("to_char(users.updated_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS')"));
+    assert!(maintenance
+        .contains("to_char(deleted_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS')"));
+    assert!(auth.contains(
+        "to_char(expires_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD\\\"T\\\"HH24:MI:SS') || '+09:00'"
+    ));
 }
 
 #[test]
@@ -447,13 +457,13 @@ async fn 管理ユーザーは管理者以外から削除できない() {
         secure_cookie: false,
     };
     let app = create_app(pool.clone(), &config).await.unwrap();
-    crate::db::query("INSERT INTO users (username, password_hash, role) VALUES ('member-delete-test', 'test', 'member')")
+    sqlx::query("INSERT INTO users (username, password_hash, role) VALUES ('member-delete-test', 'test', 'member')")
         .execute(&pool)
         .await
         .unwrap();
     let member_token = "member-delete-test-token";
-    crate::db::query(
-        "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, 2, datetime('now', '+1 hours'))",
+    sqlx::query(
+        "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, 2, CURRENT_TIMESTAMP + INTERVAL '1 hours')",
     )
     .bind(handlers::auth_handlers::hash_session_token(member_token))
     .execute(&pool)
@@ -473,7 +483,7 @@ async fn 管理ユーザーは管理者以外から削除できない() {
         .unwrap();
     assert_eq!(response.status(), axum::http::StatusCode::FORBIDDEN);
     assert_eq!(
-        crate::db::query_scalar::<i32>("SELECT active FROM users WHERE id = 1")
+        sqlx::query_scalar::<_, i32>("SELECT active FROM users WHERE id = 1")
             .fetch_one(&pool)
             .await
             .unwrap(),
@@ -495,13 +505,13 @@ async fn viewerは自分のユーザー情報だけ編集できる() {
         secure_cookie: false,
     };
     let app = create_app(pool.clone(), &config).await.unwrap();
-    crate::db::query("INSERT INTO users (username, password_hash, role) VALUES ('viewer-edit-test', 'test', 'viewer'), ('member-edit-test', 'test', 'member')")
+    sqlx::query("INSERT INTO users (username, password_hash, role) VALUES ('viewer-edit-test', 'test', 'viewer'), ('member-edit-test', 'test', 'member')")
         .execute(&pool)
         .await
         .unwrap();
     let viewer_token = "viewer-edit-test-token";
-    crate::db::query(
-        "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, 2, datetime('now', '+1 hours'))",
+    sqlx::query(
+        "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, 2, CURRENT_TIMESTAMP + INTERVAL '1 hours')",
     )
     .bind(handlers::auth_handlers::hash_session_token(viewer_token))
     .execute(&pool)
@@ -580,7 +590,7 @@ async fn viewerは自分のユーザー情報だけ編集できる() {
 
 #[test]
 fn データベース整合性対策を適用する() {
-    let migration = include_str!("../migrations_postgres/20260815010000_integrity.sql");
+    let migration = include_str!("../migrations/20260917000000_init.sql");
     let update_script = include_str!("../scripts/update.sh");
     let startup = include_str!("main.rs");
     assert!(migration.contains("REFERENCES dealers(name) ON UPDATE CASCADE ON DELETE CASCADE"));
@@ -632,11 +642,11 @@ fn googleログインは設定時だけログイン画面に表示する() {
 fn google_oauthの認証ルートと安全策を登録する() {
     let routes = include_str!("routes.rs");
     let auth = include_str!("handlers/auth_handlers.rs");
-    let migration = include_str!("../migrations_postgres/20260830010000_google_auth.sql");
+    let migration = include_str!("../migrations/20260917000000_init.sql");
     assert!(routes.contains("/auth/google"));
     assert!(routes.contains("/auth/google/callback"));
     assert!(auth.contains("oauth_states"));
-    assert!(auth.contains("datetime('now', '-10 minutes')"));
+    assert!(auth.contains("CURRENT_TIMESTAMP - INTERVAL '10 minutes'"));
     assert!(auth.contains("email_verified == Some(true)"));
     assert!(auth.contains("openidconnect.googleapis.com/v1/userinfo"));
     assert!(migration.contains("UNIQUE(provider, subject)"));
@@ -808,7 +818,7 @@ fn 同名で内容が異なるファイルは履歴化して新しい版を登�
     assert!(source.contains("Sha256::digest(&final_bytes)"));
     assert!(source.contains("file_histories"));
     assert!(source.contains("old_version + 1"));
-    assert!(source.contains("DELETE FROM file_search WHERE file_id = ?"));
+    assert!(source.contains("DELETE FROM file_search WHERE file_id = $1"));
 }
 
 #[test]
@@ -818,7 +828,7 @@ fn ファイルはハッシュ共通のストレージを参照する() {
     assert!(source.contains("async fn shared_storage_path("));
     assert!(source.contains("source_hash"));
     assert!(source.contains("Sha256::digest(&bytes)"));
-    assert!(source.contains("SELECT storage_path FROM files WHERE file_hash = ?"));
+    assert!(source.contains("SELECT storage_path FROM files WHERE file_hash = $1"));
     assert!(source.contains("file_name, storage_path, file_type"));
     assert!(!source.contains("storage::project_root"));
 }
@@ -940,7 +950,7 @@ fn デスクトップの位置情報を住所の右側に表示する() {
 #[tokio::test]
 async fn 書類アップロードは重複排除と版履歴を実際に保存する() {
     let (app, pool, storage_dir, token) = upload_test_app("test_storage_upload_document").await;
-    crate::db::query("UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE id = 1")
+    sqlx::query("UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE id = 1")
         .execute(&pool)
         .await
         .unwrap();
@@ -959,7 +969,7 @@ async fn 書類アップロードは重複排除と版履歴を実際に保存�
     assert_eq!(status, axum::http::StatusCode::CREATED);
     assert_eq!(first.version_number, 1);
     assert_eq!(
-        crate::db::query_scalar::<Option<i32>>("SELECT uploaded_by FROM files WHERE id = ?")
+        sqlx::query_scalar::<_, Option<i64>>("SELECT uploaded_by FROM files WHERE id = $1")
             .bind(first.id)
             .fetch_one(&pool)
             .await
@@ -972,14 +982,14 @@ async fn 書類アップロードは重複排除と版履歴を実際に保存�
     assert_eq!(first.source_hash, first_hash);
     assert_eq!(first.tag.as_deref(), Some(""));
     let updated_at: String =
-        crate::db::query_scalar("SELECT updated_at FROM projects WHERE id = 1")
+        sqlx::query_scalar("SELECT updated_at::text FROM projects WHERE id = 1")
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert_ne!(updated_at, "2000-01-01 00:00:00");
+    assert!(!updated_at.starts_with("2000-01-01"));
 
     let first_storage_path: String =
-        crate::db::query_scalar("SELECT storage_path FROM files WHERE id = ?")
+        sqlx::query_scalar("SELECT storage_path FROM files WHERE id = $1")
             .bind(first.id)
             .fetch_one(&pool)
             .await
@@ -991,7 +1001,7 @@ async fn 書類アップロードは重複排除と版履歴を実際に保存�
         first_bytes
     );
     let indexed_text: String =
-        crate::db::query_scalar("SELECT content FROM file_search WHERE file_id = ?")
+        sqlx::query_scalar("SELECT content FROM file_search WHERE file_id = $1")
             .bind(first.id)
             .fetch_one(&pool)
             .await
@@ -1002,7 +1012,7 @@ async fn 書類アップロードは重複排除と版履歴を実際に保存�
         post_upload_item(app.clone(), &token, 1, "report.txt", first_bytes, None).await;
     assert_eq!(duplicate_status, axum::http::StatusCode::OK);
     assert_eq!(duplicate.id, first.id);
-    let active_reports: i64 = crate::db::query_scalar(
+    let active_reports: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM files WHERE file_name = 'report.txt' AND deleted_at IS NULL",
     )
     .fetch_one(&pool)
@@ -1015,7 +1025,7 @@ async fn 書類アップロードは重複排除と版履歴を実際に保存�
     assert_eq!(shared_status, axum::http::StatusCode::CREATED);
     assert_ne!(shared.id, first.id);
     let shared_storage_path: String =
-        crate::db::query_scalar("SELECT storage_path FROM files WHERE id = ?")
+        sqlx::query_scalar("SELECT storage_path FROM files WHERE id = $1")
             .bind(shared.id)
             .fetch_one(&pool)
             .await
@@ -1029,7 +1039,7 @@ async fn 書類アップロードは重複排除と版履歴を実際に保存�
     assert_eq!(second.version_number, 2);
     assert_ne!(second.id, first.id);
     assert_eq!(
-        crate::db::query_scalar::<i64>(
+        sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(*) FROM files WHERE file_name = 'report.txt' AND deleted_at IS NULL",
         )
         .fetch_one(&pool)
@@ -1038,7 +1048,7 @@ async fn 書類アップロードは重複排除と版履歴を実際に保存�
         1
     );
     assert_eq!(
-        crate::db::query_scalar::<i64>(
+        sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(*) FROM file_histories WHERE project_id = 1 AND file_name = 'report.txt' AND version_number = 1",
         )
         .fetch_one(&pool)
@@ -1047,7 +1057,7 @@ async fn 書類アップロードは重複排除と版履歴を実際に保存�
         1
     );
     assert_eq!(
-        crate::db::query_scalar::<Option<i32>>("SELECT deleted_by FROM files WHERE id = ?")
+        sqlx::query_scalar::<_, Option<i64>>("SELECT deleted_by FROM files WHERE id = $1")
             .bind(first.id)
             .fetch_one(&pool)
             .await
@@ -1055,7 +1065,7 @@ async fn 書類アップロードは重複排除と版履歴を実際に保存�
         Some(1)
     );
     assert_eq!(
-        crate::db::query_scalar::<i64>("SELECT COUNT(*) FROM file_search WHERE file_id = ?")
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM file_search WHERE file_id = $1")
             .bind(first.id)
             .fetch_one(&pool)
             .await
@@ -1063,7 +1073,7 @@ async fn 書類アップロードは重複排除と版履歴を実際に保存�
         0
     );
     assert_eq!(
-        crate::db::query_scalar::<i64>("SELECT COUNT(DISTINCT storage_path) FROM files")
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(DISTINCT storage_path) FROM files")
             .fetch_one(&pool)
             .await
             .unwrap(),
@@ -1091,8 +1101,8 @@ async fn ファイルの論理削除者を保存する() {
         .unwrap();
     assert_eq!(response.status(), axum::http::StatusCode::NO_CONTENT);
     assert_eq!(
-        crate::db::query_scalar::<Option<i32>>(
-            "SELECT deleted_by FROM files WHERE id = ? AND deleted_at IS NOT NULL",
+        sqlx::query_scalar::<_, Option<i64>>(
+            "SELECT deleted_by FROM files WHERE id = $1 AND deleted_at IS NOT NULL",
         )
         .bind(item.id)
         .fetch_one(&pool)
@@ -1122,15 +1132,15 @@ async fn ファイルの論理削除者を保存する() {
     assert_eq!(audit[0]["uploaded_by"], "admin");
     assert_eq!(audit[0]["deleted_by"], "admin");
 
-    crate::db::query(
+    sqlx::query(
         "INSERT INTO users (username, password_hash, role) VALUES ('member-audit-test', 'test', 'member')",
     )
     .execute(&pool)
     .await
     .unwrap();
     let member_token = "member-audit-test-token";
-    crate::db::query(
-        "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, 2, datetime('now', '+1 hours'))",
+    sqlx::query(
+        "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, 2, CURRENT_TIMESTAMP + INTERVAL '1 hours')",
     )
     .bind(handlers::auth_handlers::hash_session_token(member_token))
     .execute(&pool)
@@ -1160,7 +1170,7 @@ async fn 危険なファイル名のアップロードは保存前に拒否す�
         "invalid filename"
     );
     assert_eq!(
-        crate::db::query_scalar::<i64>("SELECT COUNT(*) FROM files")
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM files")
             .fetch_one(&pool)
             .await
             .unwrap(),
@@ -1197,12 +1207,11 @@ async fn 書類タブから画像をwebp変換して写真と同じ表示がで�
     assert_eq!(item.file_type, "Document");
     assert_eq!(item.file_path, "document-image.webp");
 
-    let storage_path: String =
-        crate::db::query_scalar("SELECT storage_path FROM files WHERE id = ?")
-            .bind(item.id)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let storage_path: String = sqlx::query_scalar("SELECT storage_path FROM files WHERE id = $1")
+        .bind(item.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     let stored_bytes = tokio::fs::read(storage_dir.join(&storage_path))
         .await
         .unwrap();
@@ -1336,8 +1345,8 @@ async fn ウィンドウ終了用ログアウトは更新用の短い猶予を�
     };
     initialize_db(&pool, &config).await.unwrap();
     let token = "close-session-token";
-    crate::db::query(
-            "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, 1, datetime('now', '+1 hours'))",
+    sqlx::query(
+            "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, 1, CURRENT_TIMESTAMP + INTERVAL '1 hours')",
         )
         .bind(handlers::auth_handlers::hash_session_token(token))
         .execute(&pool)
@@ -1375,8 +1384,8 @@ async fn ウィンドウ終了用ログアウトは更新用の短い猶予を�
     assert!(keepalive_response
         .headers()
         .contains_key(header::SET_COOKIE));
-    let seconds_until_keepalive_expiry: f64 = crate::db::query_scalar(
-        "SELECT EXTRACT(EPOCH FROM (expires_at::timestamp - datetime('now')::timestamp))::float8 FROM sessions",
+    let seconds_until_keepalive_expiry: f64 = sqlx::query_scalar(
+        "SELECT EXTRACT(EPOCH FROM (expires_at - CURRENT_TIMESTAMP))::float8 FROM sessions",
     )
     .fetch_one(&pool)
     .await
@@ -1387,8 +1396,8 @@ async fn ウィンドウ終了用ログアウトは更新用の短い猶予を�
         .await
         .unwrap();
     assert_eq!(status, axum::http::StatusCode::NO_CONTENT);
-    let seconds_until_expiry: f64 = crate::db::query_scalar(
-        "SELECT EXTRACT(EPOCH FROM (expires_at::timestamp - datetime('now')::timestamp))::float8 FROM sessions",
+    let seconds_until_expiry: f64 = sqlx::query_scalar(
+        "SELECT EXTRACT(EPOCH FROM (expires_at - CURRENT_TIMESTAMP))::float8 FROM sessions",
     )
     .fetch_one(&pool)
     .await
@@ -1474,14 +1483,14 @@ async fn 販売店登録と重複防止が正常に動作する() {
     };
     initialize_db(&pool, &config).await.unwrap();
 
-    crate::db::query("INSERT INTO dealers (name, address) VALUES (?, ?)")
+    sqlx::query("INSERT INTO dealers (name, address) VALUES ($1, $2)")
         .bind("テスト建材")
         .bind("東京都")
         .execute(&pool)
         .await
         .unwrap();
 
-    let err = crate::db::query("INSERT INTO dealers (name, address) VALUES (?, ?)")
+    let err = sqlx::query("INSERT INTO dealers (name, address) VALUES ($1, $2)")
         .bind("テスト建材")
         .bind("大阪府")
         .execute(&pool)
@@ -1502,15 +1511,15 @@ async fn 販売店一覧は登録件数を返す() {
     };
     initialize_db(&pool, &config).await.unwrap();
 
-    crate::db::query("INSERT INTO dealers (name, address) VALUES ('件数販売店', '東京都')")
+    sqlx::query("INSERT INTO dealers (name, address) VALUES ('件数販売店', '東京都')")
         .execute(&pool)
         .await
         .unwrap();
-    crate::db::query("INSERT INTO projects (project_number, name, kana, dealer) VALUES ('C001', '件数案件1', 'ケンスウアンケン1', '件数販売店')")
+    sqlx::query("INSERT INTO projects (project_number, name, kana, dealer) VALUES ('C001', '件数案件1', 'ケンスウアンケン1', '件数販売店')")
             .execute(&pool)
             .await
             .unwrap();
-    crate::db::query("INSERT INTO projects (project_number, name, kana, dealer, deleted_at) VALUES ('C002', '件数案件2', 'ケンスウアンケン2', '件数販売店', CURRENT_TIMESTAMP)")
+    sqlx::query("INSERT INTO projects (project_number, name, kana, dealer, deleted_at) VALUES ('C002', '件数案件2', 'ケンスウアンケン2', '件数販売店', CURRENT_TIMESTAMP)")
             .execute(&pool)
             .await
             .unwrap();
@@ -1638,7 +1647,7 @@ async fn 単一テキストボックスのキーワード検索と複数語AND�
     initialize_db(&pool, &config).await.unwrap();
 
     // テストユーザー作成
-    let user_id: i64 = crate::db::query_scalar("INSERT INTO users (username, password_hash, role) VALUES ('test_user', 'hash', 'admin') RETURNING id")
+    let user_id: i64 = sqlx::query_scalar("INSERT INTO users (username, password_hash, role) VALUES ('test_user', 'hash', 'admin') RETURNING id")
         .fetch_one(&pool)
         .await
         .unwrap();
@@ -1646,7 +1655,7 @@ async fn 単一テキストボックスのキーワード検索と複数語AND�
     // セッショントークン作成
     let token = "test_token_12345";
     let token_hash = handlers::auth_handlers::hash_session_token(token);
-    crate::db::query("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, datetime('now', '+1 hour'))")
+    sqlx::query("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, CURRENT_TIMESTAMP + INTERVAL '1 hour')")
         .bind(token_hash)
         .bind(user_id)
         .execute(&pool)
@@ -1654,7 +1663,7 @@ async fn 単一テキストボックスのキーワード検索と複数語AND�
         .unwrap();
 
     // 案件データの登録
-    crate::db::query(
+    sqlx::query(
         "INSERT INTO projects (project_number, name, kana, address, dealer, assignee) VALUES
          ('001', '青山ビル改修', 'アオヤマビルカイシュウ', '東京都港区南青山1-1', '山田商事', '田中'),
          ('002', '青山レジデンス新築', 'アオヤマレジデンスシンチク', '東京都港区北青山2-2', '佐藤興業', '鈴木'),
@@ -2015,11 +2024,11 @@ async fn 案件と販売店は論理削除で一覧対象から除外される()
     };
     initialize_db(&pool, &config).await.unwrap();
 
-    crate::db::query("INSERT INTO projects (project_number, name, kana, address, dealer) VALUES ('001', 'テスト案件', 'テスト', '東京都', 'テスト販売店')")
+    sqlx::query("INSERT INTO projects (project_number, name, kana, address, dealer) VALUES ('001', 'テスト案件', 'テスト', '東京都', 'テスト販売店')")
             .execute(&pool)
             .await
             .unwrap();
-    let dealer_id: i64 = crate::db::query_scalar(
+    let dealer_id: i64 = sqlx::query_scalar(
         "INSERT INTO dealers (name, address) VALUES ('テスト販売店', '東京都') RETURNING id",
     )
     .fetch_one(&pool)
@@ -2045,7 +2054,7 @@ async fn 案件と販売店は論理削除で一覧対象から除外される()
             .unwrap(),
         1
     );
-    let project_count: i64 = crate::db::query_scalar("SELECT COUNT(*) FROM projects WHERE id = 1")
+    let project_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM projects WHERE id = 1")
         .fetch_one(&pool)
         .await
         .unwrap();
@@ -2083,7 +2092,7 @@ async fn 案件と販売店は論理削除で一覧対象から除外される()
             .unwrap(),
         1
     );
-    let dealer_count: i64 = crate::db::query_scalar("SELECT COUNT(*) FROM dealers WHERE id = ?")
+    let dealer_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM dealers WHERE id = $1")
         .bind(dealer_id)
         .fetch_one(&pool)
         .await
@@ -2107,13 +2116,13 @@ async fn 整合性検査はデータベースとストレージの不一致を�
         secure_cookie: false,
     };
     initialize_db(&pool, &config).await.unwrap();
-    crate::db::query(
+    sqlx::query(
         "INSERT INTO projects (project_number, name, kana) VALUES ('CHECK001', '検査案件', 'ケンサアンケン')",
     )
     .execute(&pool)
     .await
     .unwrap();
-    crate::db::query(
+    sqlx::query(
         "INSERT INTO files (project_id, file_name, storage_path, file_type, file_size, file_hash, source_hash) VALUES (1, 'missing.txt', 'missing.txt', 'Document', 3, 'invalid-hash', 'invalid-source-hash')",
     )
     .execute(&pool)
@@ -2191,13 +2200,13 @@ async fn 物理削除前にファイルを隔離してからデータベース�
         secure_cookie: false,
     };
     initialize_db(&pool, &config).await.unwrap();
-    crate::db::query(
+    sqlx::query(
         "INSERT INTO projects (project_number, name, kana) VALUES ('DELETE001', '削除案件', 'サクジョアンケン')",
     )
     .execute(&pool)
     .await
     .unwrap();
-    crate::db::query(
+    sqlx::query(
         "INSERT INTO files (project_id, file_name, storage_path, file_type, file_size, file_hash, source_hash, deleted_at) VALUES (1, 'delete.txt', 'delete.txt', 'Document', 6, 'delete-hash', 'delete-source-hash', CURRENT_TIMESTAMP)",
     )
     .execute(&pool)
@@ -2215,7 +2224,7 @@ async fn 物理削除前にファイルを隔離してからデータベース�
     );
     assert!(!storage_dir.join("delete.txt").exists());
     assert_eq!(
-        crate::db::query_scalar::<i64>("SELECT COUNT(*) FROM files WHERE id = 1")
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM files WHERE id = 1")
             .fetch_one(&pool)
             .await
             .unwrap(),
@@ -2241,7 +2250,7 @@ async fn ユーザー更新日時は初期管理者の登録時に保存する()
     initialize_db(&pool, &config).await.unwrap();
 
     let updated_at: Option<String> =
-            crate::db::query_scalar("SELECT strftime('%Y-%m-%d %H:%M:%S', updated_at, '+9 hours') FROM users WHERE username = 'admin'")
+            sqlx::query_scalar("SELECT to_char(updated_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS') FROM users WHERE username = 'admin'")
                 .fetch_one(&pool)
                 .await
                 .unwrap();
@@ -2262,7 +2271,7 @@ async fn ログインユーザー情報を取得できる() {
     initialize_db(&pool, &config).await.unwrap();
 
     let user: (i64, String, String) =
-        crate::db::query_as("SELECT id, username, role FROM users WHERE username = 'admin'")
+        sqlx::query_as("SELECT id, username, role FROM users WHERE username = 'admin'")
             .fetch_one(&pool)
             .await
             .unwrap();
@@ -2283,24 +2292,24 @@ async fn 案件と販売店にメモを追加および履歴が取得できる()
     };
     initialize_db(&pool, &config).await.unwrap();
 
-    crate::db::query(
+    sqlx::query(
         "INSERT INTO projects (project_number, name, kana) VALUES ('P001', 'テスト案件', 'テスト')",
     )
     .execute(&pool)
     .await
     .unwrap();
-    crate::db::query("INSERT INTO dealers (name) VALUES ('テスト販売店')")
+    sqlx::query("INSERT INTO dealers (name) VALUES ('テスト販売店')")
         .execute(&pool)
         .await
         .unwrap();
 
-    crate::db::query("INSERT INTO project_notes (project_id, content, created_by) VALUES (1, 'テスト案件メモ', 'admin')")
+    sqlx::query("INSERT INTO project_notes (project_id, content, created_by) VALUES (1, 'テスト案件メモ', 'admin')")
             .execute(&pool)
             .await
             .unwrap();
 
-    let p_notes: Vec<(i64, String, String, String)> = crate::db::query_as(
-        "SELECT pn.id, pn.content, COALESCE(u.username, pn.created_by), strftime('%Y-%m-%d %H:%M:%S', pn.created_at, '+9 hours') FROM project_notes pn LEFT JOIN users u ON u.id::text = pn.created_by OR u.username = pn.created_by WHERE pn.project_id = 1",
+    let p_notes: Vec<(i64, String, String, String)> = sqlx::query_as(
+        "SELECT pn.id, pn.content, COALESCE(u.username, pn.created_by), to_char(pn.created_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS') FROM project_notes pn LEFT JOIN users u ON u.id::text = pn.created_by OR u.username = pn.created_by WHERE pn.project_id = 1",
         )
         .fetch_all(&pool)
         .await
@@ -2309,13 +2318,13 @@ async fn 案件と販売店にメモを追加および履歴が取得できる()
     assert_eq!(p_notes[0].1, "テスト案件メモ");
     assert_eq!(p_notes[0].2, "admin");
 
-    crate::db::query("INSERT INTO dealer_notes (dealer_id, content, created_by) VALUES (1, 'テスト販売店メモ', 'admin')")
+    sqlx::query("INSERT INTO dealer_notes (dealer_id, content, created_by) VALUES (1, 'テスト販売店メモ', 'admin')")
             .execute(&pool)
             .await
             .unwrap();
 
-    let d_notes: Vec<(i64, String, String, String)> = crate::db::query_as(
-        "SELECT dn.id, dn.content, COALESCE(u.username, dn.created_by), strftime('%Y-%m-%d %H:%M:%S', dn.created_at, '+9 hours') FROM dealer_notes dn LEFT JOIN users u ON u.id::text = dn.created_by OR u.username = dn.created_by WHERE dn.dealer_id = 1",
+    let d_notes: Vec<(i64, String, String, String)> = sqlx::query_as(
+        "SELECT dn.id, dn.content, COALESCE(u.username, dn.created_by), to_char(dn.created_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS') FROM dealer_notes dn LEFT JOIN users u ON u.id::text = dn.created_by OR u.username = dn.created_by WHERE dn.dealer_id = 1",
         )
         .fetch_all(&pool)
         .await
@@ -2337,15 +2346,15 @@ async fn 案件メモの追加で案件更新日時を更新する() {
         secure_cookie: false,
     };
     initialize_db(&pool, &config).await.unwrap();
-    crate::db::query(
+    sqlx::query(
         "INSERT INTO projects (project_number, name, kana, updated_at) VALUES ('P002', '更新日時案件', 'コウシン', '2000-01-01 00:00:00')",
     )
     .execute(&pool)
     .await
     .unwrap();
     let token = "note-updated-at-session";
-    crate::db::query(
-        "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, 1, datetime('now', '+1 hour'))",
+    sqlx::query(
+        "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, 1, CURRENT_TIMESTAMP + INTERVAL '1 hour')",
     )
     .bind(handlers::auth_handlers::hash_session_token(token))
     .execute(&pool)
@@ -2380,11 +2389,11 @@ async fn 案件メモの追加で案件更新日時を更新する() {
     .unwrap();
     assert_eq!(status, axum::http::StatusCode::CREATED);
     let updated_at: String =
-        crate::db::query_scalar("SELECT updated_at FROM projects WHERE id = 1")
+        sqlx::query_scalar("SELECT updated_at::text FROM projects WHERE id = 1")
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert_ne!(updated_at, "2000-01-01 00:00:00");
+    assert!(!updated_at.starts_with("2000-01-01"));
 }
 
 #[tokio::test]
@@ -2418,8 +2427,8 @@ async fn 案件登録および更新時に未登録の販売店が自動追加�
     });
 
     let token = "test-session-token-autodealer";
-    crate::db::query(
-            "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, 1, datetime('now', '+1 hours'))",
+    sqlx::query(
+            "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, 1, CURRENT_TIMESTAMP + INTERVAL '1 hours')",
         )
         .bind(handlers::auth_handlers::hash_session_token(token))
         .execute(&pool)
@@ -2451,7 +2460,7 @@ async fn 案件登録および更新時に未登録の販売店が自動追加�
             .await;
     assert!(res.is_ok());
 
-    let dealer: Option<(String,)> = crate::db::query_as(
+    let dealer: Option<(String,)> = sqlx::query_as(
         "SELECT name FROM dealers WHERE name = '新規自動販売店' AND deleted_at IS NULL",
     )
     .fetch_optional(&pool)
@@ -2459,13 +2468,13 @@ async fn 案件登録および更新時に未登録の販売店が自動追加�
     .unwrap();
     assert!(dealer.is_some());
     let phone: Option<String> =
-        crate::db::query_scalar("SELECT phone FROM projects WHERE project_number = '999'")
+        sqlx::query_scalar("SELECT phone FROM projects WHERE project_number = '999'")
             .fetch_optional(&pool)
             .await
             .unwrap();
     assert_eq!(phone.as_deref(), Some("0312345678"));
     let email: Option<String> =
-        crate::db::query_scalar("SELECT email FROM projects WHERE project_number = '999'")
+        sqlx::query_scalar("SELECT email FROM projects WHERE project_number = '999'")
             .fetch_optional(&pool)
             .await
             .unwrap();
@@ -2502,8 +2511,8 @@ async fn 販売店登録でカナを保存および更新できる() {
     });
 
     let token = "test-session-token-dealer-kana";
-    crate::db::query(
-            "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, 1, datetime('now', '+1 hours'))",
+    sqlx::query(
+            "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, 1, CURRENT_TIMESTAMP + INTERVAL '1 hours')",
         )
         .bind(handlers::auth_handlers::hash_session_token(token))
         .execute(&pool)
@@ -2538,14 +2547,14 @@ async fn 販売店登録でカナを保存および更新できる() {
     assert_eq!(created.fax.as_deref(), Some("0398765432"));
     assert_eq!(created.email.as_deref(), Some("dealer@example.com"));
 
-    crate::db::query(
-        "INSERT INTO projects (project_number, name, dealer) VALUES ('D001', '紐付け確認案件', ?)",
+    sqlx::query(
+        "INSERT INTO projects (project_number, name, dealer) VALUES ('D001', '紐付け確認案件', $1)",
     )
     .bind(&created.name)
     .execute(&pool)
     .await
     .unwrap();
-    crate::db::query("INSERT INTO dealer_contacts (dealer_name, name, phone) VALUES (?, '担当者A', '03-0000-0000')")
+    sqlx::query("INSERT INTO dealer_contacts (dealer_name, name, phone) VALUES ($1, '担当者A', '03-0000-0000')")
         .bind(&created.name)
         .execute(&pool)
         .await
@@ -2563,15 +2572,15 @@ async fn 販売店登録でカナを保存および更新できる() {
     )
     .await;
     assert_eq!(contact_create.unwrap(), axum::http::StatusCode::CREATED);
-    let contact_id: i64 = crate::db::query_scalar(
-        "SELECT id FROM dealer_contacts WHERE dealer_name = ? AND name = '担当者B'",
+    let contact_id: i64 = sqlx::query_scalar(
+        "SELECT id FROM dealer_contacts WHERE dealer_name = $1 AND name = '担当者B'",
     )
     .bind(&created.name)
     .fetch_one(&pool)
     .await
     .unwrap();
     let contact_email: String =
-        crate::db::query_scalar("SELECT email FROM dealer_contacts WHERE id = ?")
+        sqlx::query_scalar("SELECT email FROM dealer_contacts WHERE id = $1")
             .bind(contact_id)
             .fetch_one(&pool)
             .await
@@ -2629,20 +2638,20 @@ async fn 販売店登録でカナを保存および更新できる() {
         update_res.unwrap().0.kana.as_deref(),
         Some("テストハンバイテンカナコウシン")
     );
-    let dealer_email: String = crate::db::query_scalar("SELECT email FROM dealers WHERE id = ?")
+    let dealer_email: String = sqlx::query_scalar("SELECT email FROM dealers WHERE id = $1")
         .bind(created.id)
         .fetch_one(&pool)
         .await
         .unwrap();
     assert_eq!(dealer_email, "dealer-updated@example.com");
     let project_dealer: String =
-        crate::db::query_scalar("SELECT dealer FROM projects WHERE project_number = 'D001'")
+        sqlx::query_scalar("SELECT dealer FROM projects WHERE project_number = 'D001'")
             .fetch_one(&pool)
             .await
             .unwrap();
     assert_eq!(project_dealer, "テスト販売店カナ");
     let contact_dealer: String =
-        crate::db::query_scalar("SELECT dealer_name FROM dealer_contacts WHERE name = '担当者A'")
+        sqlx::query_scalar("SELECT dealer_name FROM dealer_contacts WHERE name = '担当者A'")
             .fetch_one(&pool)
             .await
             .unwrap();

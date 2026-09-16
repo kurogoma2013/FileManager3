@@ -106,26 +106,28 @@ pub fn clear_session_cookie(secure: bool) -> String {
 }
 
 pub async fn cleanup_expired_auth_state(pool: &DbPool) -> Result<(), sqlx::Error> {
-    crate::db::query("DELETE FROM sessions WHERE expires_at <= datetime('now')")
+    sqlx::query("DELETE FROM sessions WHERE expires_at <= CURRENT_TIMESTAMP")
         .execute(pool)
         .await?;
-    crate::db::query("DELETE FROM passkey_challenges WHERE expires_at <= datetime('now')")
+    sqlx::query("DELETE FROM passkey_challenges WHERE expires_at <= CURRENT_TIMESTAMP")
         .execute(pool)
         .await?;
-    crate::db::query("DELETE FROM auth_login_attempts WHERE window_started_at < datetime('now', '-15 minutes') AND (blocked_until IS NULL OR blocked_until <= datetime('now'))")
+    sqlx::query("DELETE FROM auth_login_attempts WHERE window_started_at < CURRENT_TIMESTAMP - INTERVAL '15 minutes' AND (blocked_until IS NULL OR blocked_until <= CURRENT_TIMESTAMP)")
         .execute(pool)
         .await?;
-    crate::db::query("DELETE FROM oauth_states WHERE created_at <= datetime('now', '-10 minutes')")
-        .execute(pool)
-        .await?;
+    sqlx::query(
+        "DELETE FROM oauth_states WHERE created_at <= CURRENT_TIMESTAMP - INTERVAL '10 minutes'",
+    )
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
 const LOGIN_ATTEMPT_LIMIT: i64 = 5;
 
 async fn check_login_rate_limit(pool: &DbPool, username: &str) -> Result<(), ApiError> {
-    let blocked: Option<i64> = crate::db::query_scalar(
-        "SELECT 1 FROM auth_login_attempts WHERE username = ? AND blocked_until > datetime('now')",
+    let blocked: Option<i64> = sqlx::query_scalar(
+        "SELECT 1 FROM auth_login_attempts WHERE username = $1 AND blocked_until > CURRENT_TIMESTAMP",
     )
     .bind(username)
     .fetch_optional(pool)
@@ -137,21 +139,21 @@ async fn check_login_rate_limit(pool: &DbPool, username: &str) -> Result<(), Api
 }
 
 async fn record_login_failure(pool: &DbPool, username: &str) -> Result<(), ApiError> {
-    crate::db::query(
+    sqlx::query(
         "INSERT INTO auth_login_attempts (username, attempts, window_started_at, blocked_until)
-         VALUES (?, 1, CURRENT_TIMESTAMP, NULL)
+         VALUES ($1, 1, CURRENT_TIMESTAMP, NULL)
          ON CONFLICT(username) DO UPDATE SET
            attempts = CASE
-             WHEN auth_login_attempts.window_started_at <= datetime('now', '-15 minutes') THEN 1
+             WHEN auth_login_attempts.window_started_at <= CURRENT_TIMESTAMP - INTERVAL '15 minutes' THEN 1
              ELSE auth_login_attempts.attempts + 1
            END,
            window_started_at = CASE
-             WHEN auth_login_attempts.window_started_at <= datetime('now', '-15 minutes') THEN datetime('now')
+             WHEN auth_login_attempts.window_started_at <= CURRENT_TIMESTAMP - INTERVAL '15 minutes' THEN CURRENT_TIMESTAMP
              ELSE auth_login_attempts.window_started_at
            END,
            blocked_until = CASE
-             WHEN auth_login_attempts.window_started_at > datetime('now', '-15 minutes')
-                  AND auth_login_attempts.attempts + 1 >= ? THEN datetime('now', '+15 minutes')
+             WHEN auth_login_attempts.window_started_at > CURRENT_TIMESTAMP - INTERVAL '15 minutes'
+                  AND auth_login_attempts.attempts + 1 >= $2 THEN CURRENT_TIMESTAMP + INTERVAL '15 minutes'
              ELSE NULL
            END",
     )
@@ -163,7 +165,7 @@ async fn record_login_failure(pool: &DbPool, username: &str) -> Result<(), ApiEr
 }
 
 async fn clear_login_failures(pool: &DbPool, username: &str) -> Result<(), ApiError> {
-    crate::db::query("DELETE FROM auth_login_attempts WHERE username = ?")
+    sqlx::query("DELETE FROM auth_login_attempts WHERE username = $1")
         .bind(username)
         .execute(pool)
         .await?;
@@ -178,11 +180,11 @@ pub async fn authenticate_headers(
         return Ok(None);
     };
     let token_hash = hash_session_token(&token);
-    crate::db::query_as::<(i64, String)>(
+    sqlx::query_as::<_, (i64, String)>(
         "SELECT u.id, u.role
          FROM sessions s
          JOIN users u ON u.id = s.user_id
-         WHERE s.token_hash = ? AND s.expires_at > datetime('now') AND u.active = 1",
+         WHERE s.token_hash = $1 AND s.expires_at > CURRENT_TIMESTAMP AND u.active = 1",
     )
     .bind(token_hash)
     .fetch_optional(pool)
@@ -218,7 +220,7 @@ pub async fn require_project_access(
 ) -> Result<(), ApiError> {
     authenticate_request(state, headers).await?;
     let project_exists: Option<i64> =
-        crate::db::query_scalar("SELECT id FROM projects WHERE id = ? AND deleted_at IS NULL")
+        sqlx::query_scalar("SELECT id FROM projects WHERE id = $1 AND deleted_at IS NULL")
             .bind(project_id)
             .fetch_optional(&state.pool)
             .await?;
@@ -231,9 +233,9 @@ pub async fn require_project_access(
 pub async fn create_session_response(state: &AppState, user_id: i64) -> Result<Response, ApiError> {
     cleanup_expired_auth_state(&state.pool).await?;
     let token = uuid::Uuid::new_v4().to_string();
-    crate::db::query(
+    sqlx::query(
         "INSERT INTO sessions (token_hash, user_id, expires_at)
-         VALUES (?, ?, datetime('now', '+1 hour'))",
+         VALUES ($1, $2, CURRENT_TIMESTAMP + INTERVAL '1 hour')",
     )
     .bind(hash_session_token(&token))
     .bind(user_id)
@@ -257,9 +259,9 @@ pub async fn keepalive(
     let Some(token) = session_token(&headers) else {
         return Err(ApiError::Unauthorized);
     };
-    let result = crate::db::query(
-        "UPDATE sessions SET expires_at = datetime('now', '+1 hour')
-         WHERE token_hash = ? AND expires_at > datetime('now')",
+    let result = sqlx::query(
+        "UPDATE sessions SET expires_at = CURRENT_TIMESTAMP + INTERVAL '1 hour'
+         WHERE token_hash = $1 AND expires_at > CURRENT_TIMESTAMP",
     )
     .bind(hash_session_token(&token))
     .execute(&state.pool)
@@ -354,7 +356,7 @@ pub async fn google_login_start(State(state): State<Arc<AppState>>) -> Result<Re
     };
     cleanup_expired_auth_state(&state.pool).await?;
     let oauth_state = uuid::Uuid::new_v4().to_string();
-    crate::db::query("INSERT INTO oauth_states (state) VALUES (?)")
+    sqlx::query("INSERT INTO oauth_states (state) VALUES ($1)")
         .bind(&oauth_state)
         .execute(&state.pool)
         .await?;
@@ -385,9 +387,9 @@ pub async fn google_login_callback(
     };
 
     let mut transaction = state.pool.begin().await?;
-    let valid_state: Option<String> = crate::db::query_scalar(
+    let valid_state: Option<String> = sqlx::query_scalar(
         "SELECT state FROM oauth_states
-         WHERE state = ? AND created_at > datetime('now', '-10 minutes')",
+         WHERE state = $1 AND created_at > CURRENT_TIMESTAMP - INTERVAL '10 minutes'",
     )
     .bind(&oauth_state)
     .fetch_optional(&mut *transaction)
@@ -395,7 +397,7 @@ pub async fn google_login_callback(
     if valid_state.is_none() {
         return redirect_response("/login?error=google");
     }
-    crate::db::query("DELETE FROM oauth_states WHERE state = ?")
+    sqlx::query("DELETE FROM oauth_states WHERE state = $1")
         .bind(&oauth_state)
         .execute(&mut *transaction)
         .await?;
@@ -472,10 +474,10 @@ async fn find_or_create_google_user(
     email: &str,
 ) -> Result<Option<i64>, ApiError> {
     let mut transaction = pool.begin().await?;
-    let identity_user: Option<(i64, i64)> = crate::db::query_as(
+    let identity_user: Option<(i64, i64)> = sqlx::query_as(
         "SELECT u.id, u.active
          FROM oauth_identities i JOIN users u ON u.id = i.user_id
-         WHERE i.provider = 'google' AND i.subject = ?",
+         WHERE i.provider = 'google' AND i.subject = $1",
     )
     .bind(subject)
     .fetch_optional(&mut *transaction)
@@ -486,7 +488,7 @@ async fn find_or_create_google_user(
     }
 
     let existing_user: Option<(i64, i64)> =
-        crate::db::query_as("SELECT id, active FROM users WHERE username = ?")
+        sqlx::query_as("SELECT id, active FROM users WHERE username = $1")
             .bind(email)
             .fetch_optional(&mut *transaction)
             .await?;
@@ -502,8 +504,8 @@ async fn find_or_create_google_user(
                 tracing::error!(error = %error, "Googleユーザーの初期パスワードを生成できませんでした");
                 ApiError::Database
             })?;
-        let user_id = crate::db::query_scalar::< i64>(
-            "INSERT INTO users (username, password_hash, role, updated_at) VALUES (?, ?, 'member', CURRENT_TIMESTAMP) RETURNING id",
+        let user_id = sqlx::query_scalar::<_,  i64>(
+            "INSERT INTO users (username, password_hash, role, updated_at) VALUES ($1, $2, 'member', CURRENT_TIMESTAMP) RETURNING id",
         )
         .bind(email)
         .bind(password_hash)
@@ -511,8 +513,8 @@ async fn find_or_create_google_user(
         .await?;
         user_id
     };
-    crate::db::query(
-        "INSERT INTO oauth_identities (provider, subject, user_id, email) VALUES ('google', ?, ?, ?)",
+    sqlx::query(
+        "INSERT INTO oauth_identities (provider, subject, user_id, email) VALUES ('google', $1, $2, $3)",
     )
     .bind(subject)
     .bind(user_id)
@@ -548,7 +550,7 @@ pub async fn logout(
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     if let Some(token) = session_token(&headers) {
-        crate::db::query("DELETE FROM sessions WHERE token_hash = ?")
+        sqlx::query("DELETE FROM sessions WHERE token_hash = $1")
             .bind(hash_session_token(&token))
             .execute(&state.pool)
             .await?;
@@ -573,8 +575,8 @@ pub async fn logout_on_close(
     };
     // Reload also fires pagehide. Keep a short grace period so the new page can
     // call /api/me and renew the session before a real window close expires it.
-    crate::db::query(
-        "UPDATE sessions SET expires_at = datetime('now', '+5 seconds') WHERE token_hash = ?",
+    sqlx::query(
+        "UPDATE sessions SET expires_at = CURRENT_TIMESTAMP + INTERVAL '5 seconds' WHERE token_hash = $1",
     )
     .bind(hash_session_token(&token))
     .execute(&state.pool)
@@ -589,7 +591,7 @@ pub async fn me(
     let auth_user = authenticate_request(&state, &headers).await?;
 
     let user: Option<(i64, String, String)> =
-        crate::db::query_as("SELECT id, username, role FROM users WHERE id = ? AND active = 1")
+        sqlx::query_as("SELECT id, username, role FROM users WHERE id = $1 AND active = 1")
             .bind(auth_user.0)
             .fetch_optional(&state.pool)
             .await?;
@@ -598,8 +600,8 @@ pub async fn me(
         return Err(ApiError::Unauthorized);
     };
 
-    let session_expires_at: String = crate::db::query_scalar(
-        "SELECT strftime('%Y-%m-%dT%H:%M:%S+09:00', expires_at, '+9 hours') FROM sessions WHERE token_hash = ?",
+    let session_expires_at: String = sqlx::query_scalar(
+        "SELECT to_char(expires_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD\"T\"HH24:MI:SS') || '+09:00' FROM sessions WHERE token_hash = $1",
     )
     .bind(session_token(&headers).map(|token| hash_session_token(&token)))
     .fetch_one(&state.pool)
@@ -615,7 +617,7 @@ pub async fn me(
 
 pub async fn ensure_webauthn_id(pool: &DbPool, user_id: i64) -> Result<uuid::Uuid, ApiError> {
     let existing: Option<String> =
-        crate::db::query_scalar("SELECT webauthn_id FROM users WHERE id = ?")
+        sqlx::query_scalar("SELECT webauthn_id FROM users WHERE id = $1")
             .bind(user_id)
             .fetch_optional(pool)
             .await?;
@@ -625,19 +627,17 @@ pub async fn ensure_webauthn_id(pool: &DbPool, user_id: i64) -> Result<uuid::Uui
         }
     }
     let webauthn_id = uuid::Uuid::new_v4();
-    crate::db::query(
-        "UPDATE users SET webauthn_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-    )
-    .bind(webauthn_id.to_string())
-    .bind(user_id)
-    .execute(pool)
-    .await?;
+    sqlx::query("UPDATE users SET webauthn_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2")
+        .bind(webauthn_id.to_string())
+        .bind(user_id)
+        .execute(pool)
+        .await?;
     Ok(webauthn_id)
 }
 
 pub async fn load_passkeys(pool: &DbPool, user_id: i64) -> Result<Vec<Passkey>, ApiError> {
     let rows: Vec<(String,)> =
-        crate::db::query_as("SELECT passkey_json FROM passkeys WHERE user_id = ? ORDER BY id ASC")
+        sqlx::query_as("SELECT passkey_json FROM passkeys WHERE user_id = $1 ORDER BY id ASC")
             .bind(user_id)
             .fetch_all(pool)
             .await?;
@@ -659,11 +659,10 @@ pub async fn user_passkey_register_start(
     if user.1 != "admin" {
         return Err(ApiError::Forbidden);
     }
-    let username: Option<String> =
-        crate::db::query_scalar("SELECT username FROM users WHERE id = ?")
-            .bind(user_id)
-            .fetch_optional(&state.pool)
-            .await?;
+    let username: Option<String> = sqlx::query_scalar("SELECT username FROM users WHERE id = $1")
+        .bind(user_id)
+        .fetch_optional(&state.pool)
+        .await?;
     let username = username.ok_or(ApiError::NotFound)?;
     start_passkey_registration_for_user(&state, user_id, &username).await
 }
@@ -690,9 +689,9 @@ pub async fn start_passkey_registration_for_user(
         .map_err(|_| ApiError::BadRequest("パスキー登録を開始できませんでした"))?;
     let challenge_id = uuid::Uuid::new_v4().to_string();
     let state_json = serde_json::to_string(&registration).map_err(|_| ApiError::Database)?;
-    crate::db::query(
+    sqlx::query(
         "INSERT INTO passkey_challenges (challenge_id, user_id, challenge_type, state_json, expires_at)
-         VALUES (?, ?, 'registration', ?, datetime('now', '+5 minutes'))"
+         VALUES ($1, $2, 'registration', $3, CURRENT_TIMESTAMP + INTERVAL '5 minutes')"
     )
     .bind(&challenge_id)
     .bind(user_id)
@@ -711,9 +710,9 @@ pub async fn passkey_register_finish(
     Json(request): Json<PasskeyRegisterFinishRequest>,
 ) -> Result<Response, ApiError> {
     authenticate_admin(&state, &headers).await?;
-    let row: Option<(i64, String)> = crate::db::query_as(
+    let row: Option<(i64, String)> = sqlx::query_as(
         "SELECT user_id, state_json FROM passkey_challenges
-         WHERE challenge_id = ? AND challenge_type = 'registration' AND expires_at > datetime('now')"
+         WHERE challenge_id = $1 AND challenge_type = 'registration' AND expires_at > CURRENT_TIMESTAMP"
     )
     .bind(&request.challenge_id)
     .fetch_optional(&state.pool)
@@ -731,15 +730,15 @@ pub async fn passkey_register_finish(
         .finish_passkey_registration(&request.credential, &registration_state)
         .map_err(|_| ApiError::Unauthorized)?;
 
-    crate::db::query("DELETE FROM passkey_challenges WHERE challenge_id = ?")
+    sqlx::query("DELETE FROM passkey_challenges WHERE challenge_id = $1")
         .bind(&request.challenge_id)
         .execute(&state.pool)
         .await?;
 
     let credential_id = serde_json::to_string(passkey.cred_id()).map_err(|_| ApiError::Database)?;
     let passkey_json = serde_json::to_string(&passkey).map_err(|_| ApiError::Database)?;
-    crate::db::query(
-        "INSERT INTO passkeys (user_id, credential_id, passkey_json) VALUES (?, ?, ?)
+    sqlx::query(
+        "INSERT INTO passkeys (user_id, credential_id, passkey_json) VALUES ($1, $2, $3)
          ON CONFLICT(credential_id) DO UPDATE SET user_id = excluded.user_id, passkey_json = excluded.passkey_json",
     )
     .bind(user_id)
@@ -747,7 +746,7 @@ pub async fn passkey_register_finish(
     .bind(passkey_json)
     .execute(&state.pool)
     .await?;
-    crate::db::query("UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+    sqlx::query("UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = $1")
         .bind(user_id)
         .execute(&state.pool)
         .await?;
@@ -761,7 +760,7 @@ pub async fn passkey_login_start(
     cleanup_expired_auth_state(&state.pool).await?;
     let username = request.username.trim();
     let user: Option<(i64,)> =
-        crate::db::query_as("SELECT id FROM users WHERE username = ? AND active = 1")
+        sqlx::query_as("SELECT id FROM users WHERE username = $1 AND active = 1")
             .bind(username)
             .fetch_optional(&state.pool)
             .await?;
@@ -778,9 +777,9 @@ pub async fn passkey_login_start(
         .map_err(|_| ApiError::BadRequest("パスキー認証を開始できませんでした"))?;
     let challenge_id = uuid::Uuid::new_v4().to_string();
     let state_json = serde_json::to_string(&authentication).map_err(|_| ApiError::Database)?;
-    crate::db::query(
+    sqlx::query(
         "INSERT INTO passkey_challenges (challenge_id, user_id, challenge_type, state_json, expires_at)
-         VALUES (?, ?, 'authentication', ?, datetime('now', '+5 minutes'))"
+         VALUES ($1, $2, 'authentication', $3, CURRENT_TIMESTAMP + INTERVAL '5 minutes')"
     )
     .bind(&challenge_id)
     .bind(user_id)
@@ -797,9 +796,9 @@ pub async fn passkey_login_finish(
     State(state): State<Arc<AppState>>,
     Json(request): Json<PasskeyLoginFinishRequest>,
 ) -> Result<Response, ApiError> {
-    let row: Option<(i64, String)> = crate::db::query_as(
+    let row: Option<(i64, String)> = sqlx::query_as(
         "SELECT user_id, state_json FROM passkey_challenges
-         WHERE challenge_id = ? AND challenge_type = 'authentication' AND expires_at > datetime('now')"
+         WHERE challenge_id = $1 AND challenge_type = 'authentication' AND expires_at > CURRENT_TIMESTAMP"
     )
     .bind(&request.challenge_id)
     .fetch_optional(&state.pool)
@@ -817,7 +816,7 @@ pub async fn passkey_login_finish(
         .finish_passkey_authentication(&request.credential, &authentication_state)
         .map_err(|_| ApiError::Unauthorized)?;
 
-    crate::db::query("DELETE FROM passkey_challenges WHERE challenge_id = ?")
+    sqlx::query("DELETE FROM passkey_challenges WHERE challenge_id = $1")
         .bind(&request.challenge_id)
         .execute(&state.pool)
         .await?;
@@ -828,7 +827,7 @@ pub async fn passkey_login_finish(
             let credential_id =
                 serde_json::to_string(passkey.cred_id()).map_err(|_| ApiError::Database)?;
             let passkey_json = serde_json::to_string(passkey).map_err(|_| ApiError::Database)?;
-            crate::db::query("UPDATE passkeys SET passkey_json = ? WHERE credential_id = ?")
+            sqlx::query("UPDATE passkeys SET passkey_json = $1 WHERE credential_id = $2")
                 .bind(passkey_json)
                 .bind(credential_id)
                 .execute(&state.pool)
@@ -845,11 +844,11 @@ pub async fn delete_user_passkeys(
     headers: HeaderMap,
 ) -> Result<StatusCode, ApiError> {
     authenticate_admin(&state, &headers).await?;
-    crate::db::query("DELETE FROM passkeys WHERE user_id = ?")
+    sqlx::query("DELETE FROM passkeys WHERE user_id = $1")
         .bind(user_id)
         .execute(&state.pool)
         .await?;
-    crate::db::query("UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+    sqlx::query("UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = $1")
         .bind(user_id)
         .execute(&state.pool)
         .await?;

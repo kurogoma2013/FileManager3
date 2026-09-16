@@ -28,7 +28,7 @@ impl IntegrityReport {
 }
 
 async fn load_storage_references(pool: &DbPool) -> Result<Vec<StorageReference>, sqlx::Error> {
-    crate::db::query_as(
+    sqlx::query_as(
         "SELECT storage_path, file_size, file_hash FROM files
          UNION ALL
          SELECT storage_path, file_size, file_hash FROM file_histories",
@@ -93,15 +93,13 @@ pub async fn check_integrity(
         database_checks: 2,
         ..IntegrityReport::default()
     };
-    let database_integrity: String = crate::db::query_scalar("SELECT 'ok'")
-        .fetch_one(pool)
-        .await?;
+    let database_integrity: String = sqlx::query_scalar("SELECT 'ok'").fetch_one(pool).await?;
     if database_integrity != "ok" {
         report
             .issues
             .push(format!("データベース整合性エラー: {database_integrity}"));
     }
-    let foreign_key_errors: i64 = crate::db::query_scalar("SELECT 0::bigint")
+    let foreign_key_errors: i64 = sqlx::query_scalar("SELECT 0::bigint")
         .fetch_one(pool)
         .await?;
     if foreign_key_errors > 0 {

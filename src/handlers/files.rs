@@ -60,8 +60,8 @@ async fn shared_storage_path(
     pool: &DbPool,
     file_hash: &str,
 ) -> Result<Option<String>, sqlx::Error> {
-    crate::db::query_scalar(
-        "SELECT storage_path FROM files WHERE file_hash = ? AND deleted_at IS NULL LIMIT 1",
+    sqlx::query_scalar(
+        "SELECT storage_path FROM files WHERE file_hash = $1 AND deleted_at IS NULL LIMIT 1",
     )
     .bind(file_hash)
     .fetch_optional(pool)
@@ -74,8 +74,8 @@ async fn active_file_by_source_hash(
     source_hash: &str,
     file_type: &str,
 ) -> Result<Option<i64>, sqlx::Error> {
-    crate::db::query_scalar(
-        "SELECT id FROM files WHERE project_id = ? AND source_hash = ? AND file_type = ? AND deleted_at IS NULL LIMIT 1",
+    sqlx::query_scalar(
+        "SELECT id FROM files WHERE project_id = $1 AND source_hash = $2 AND file_type = $3 AND deleted_at IS NULL LIMIT 1",
     )
     .bind(project_id)
     .bind(source_hash)
@@ -85,10 +85,10 @@ async fn active_file_by_source_hash(
 }
 
 async fn load_file_item(pool: &DbPool, id: i64) -> Result<FileItem, sqlx::Error> {
-    crate::db::query_as::< FileItem>(
+    sqlx::query_as::<_,  FileItem>(
         "SELECT id, version_number, file_name AS file_path, file_type, file_hash, source_hash, tag, file_size,
-            strftime('%Y-%m-%d %H:%M:%S', created_at, '+9 hours') AS created_at
-         FROM files WHERE id = ? AND deleted_at IS NULL",
+            to_char(created_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS') AS created_at
+         FROM files WHERE id = $1 AND deleted_at IS NULL",
     )
     .bind(id)
     .fetch_one(pool)
@@ -350,10 +350,10 @@ async fn active_file_by_name(
     filename: &str,
     file_type: &str,
 ) -> Result<Option<(i64, i32, String, String, String, i64)>, sqlx::Error> {
-    crate::db::query_as(
+    sqlx::query_as(
         "SELECT id, version_number, storage_path, file_type, file_hash, file_size FROM files
-         WHERE project_id = ? AND deleted_at IS NULL
-           AND file_name = ? AND file_type = ?
+         WHERE project_id = $1 AND deleted_at IS NULL
+           AND file_name = $2 AND file_type = $3
          ORDER BY version_number DESC, id DESC LIMIT 1",
     )
     .bind(project_id)
@@ -404,8 +404,8 @@ async fn batch_file_rows(
     }
     let mut rows = Vec::with_capacity(file_ids.len());
     for file_id in file_ids {
-        let row: Option<(i64, String, String, i64)> = crate::db::query_as(
-        "SELECT id, file_name, file_type, project_id FROM files WHERE id = ? AND deleted_at IS NULL",
+        let row: Option<(i64, String, String, i64)> = sqlx::query_as(
+        "SELECT id, file_name, file_type, project_id FROM files WHERE id = $1 AND deleted_at IS NULL",
         )
         .bind(file_id)
         .fetch_optional(pool)
@@ -416,7 +416,7 @@ async fn batch_file_rows(
 }
 
 pub async fn file_project_id(pool: &DbPool, id: i64) -> Result<i64, ApiError> {
-    crate::db::query_scalar("SELECT project_id FROM files WHERE id = ? AND deleted_at IS NULL")
+    sqlx::query_scalar("SELECT project_id FROM files WHERE id = $1 AND deleted_at IS NULL")
         .bind(id)
         .fetch_optional(pool)
         .await?
@@ -432,18 +432,17 @@ pub async fn require_upload_access(
         .await
         .map_err(|_| ApiError::Database)?
         .ok_or(ApiError::Unauthorized)?;
-    let exists: i64 = crate::db::query_scalar(
-        "SELECT COUNT(*) FROM projects WHERE id = ? AND deleted_at IS NULL",
-    )
-    .bind(project_id)
-    .fetch_one(&state.pool)
-    .await?;
+    let exists: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM projects WHERE id = $1 AND deleted_at IS NULL")
+            .bind(project_id)
+            .fetch_one(&state.pool)
+            .await?;
     if exists == 0 {
         return Err(ApiError::NotFound);
     }
     if can_upload_files(&user.1)
-        || crate::db::query_scalar::< i64>(
-            "SELECT COUNT(*) FROM project_permissions pp JOIN projects p ON p.id = pp.project_id WHERE pp.user_id = ? AND pp.project_id = ? AND p.deleted_at IS NULL",
+        || sqlx::query_scalar::<_,  i64>(
+            "SELECT COUNT(*) FROM project_permissions pp JOIN projects p ON p.id = pp.project_id WHERE pp.user_id = $1 AND pp.project_id = $2 AND p.deleted_at IS NULL",
         )
         .bind(user.0)
         .bind(project_id)
@@ -462,8 +461,8 @@ pub async fn file_thumbnail(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
-    let file_info: Option<(String, i64)> = crate::db::query_as(
-        "SELECT storage_path, project_id FROM files WHERE id = ? AND file_type IN ('Picture', 'Document') AND deleted_at IS NULL",
+    let file_info: Option<(String, i64)> = sqlx::query_as(
+        "SELECT storage_path, project_id FROM files WHERE id = $1 AND file_type IN ('Picture', 'Document') AND deleted_at IS NULL",
     )
     .bind(id)
     .fetch_optional(&state.pool)
@@ -497,12 +496,11 @@ pub async fn upload_file(
 ) -> Result<(StatusCode, Json<FileItem>), ApiError> {
     let user = require_upload_access(&headers, &state, project_id).await?;
     let _storage_guard = maintenance::storage_operation_guard().await;
-    let exists: i64 = crate::db::query_scalar(
-        "SELECT COUNT(*) FROM projects WHERE id = ? AND deleted_at IS NULL",
-    )
-    .bind(project_id)
-    .fetch_one(&state.pool)
-    .await?;
+    let exists: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM projects WHERE id = $1 AND deleted_at IS NULL")
+            .bind(project_id)
+            .fetch_one(&state.pool)
+            .await?;
     if exists == 0 {
         return Err(ApiError::NotFound);
     }
@@ -653,22 +651,22 @@ pub async fn upload_file(
     let persistence_result: Result<i64, ApiError> = async {
         let mut transaction = state.pool.begin().await?;
         let version_number = if let Some((old_id, old_version, _, _, _, _)) = existing {
-        crate::db::query(
+        sqlx::query(
             "INSERT INTO file_histories (file_id, project_id, version_number, file_name, storage_path, file_type, file_hash, source_hash, file_size, tag)
              SELECT id, project_id, version_number, file_name, storage_path, file_type, file_hash, source_hash, file_size, tag
-             FROM files WHERE id = ?",
+             FROM files WHERE id = $1",
         )
         .bind(old_id)
         .execute(&mut *transaction)
         .await?;
-        crate::db::query(
-            "UPDATE files SET deleted_at = CURRENT_TIMESTAMP, deleted_by = ? WHERE id = ? AND deleted_at IS NULL",
+        sqlx::query(
+            "UPDATE files SET deleted_at = CURRENT_TIMESTAMP, deleted_by = $1 WHERE id = $2 AND deleted_at IS NULL",
         )
         .bind(user.0)
         .bind(old_id)
         .execute(&mut *transaction)
         .await?;
-        crate::db::query("DELETE FROM file_search WHERE file_id = ?")
+        sqlx::query("DELETE FROM file_search WHERE file_id = $1")
             .bind(old_id)
             .execute(&mut *transaction)
             .await?;
@@ -676,8 +674,8 @@ pub async fn upload_file(
     } else {
         1
         };
-        let file_id = crate::db::query_scalar::< i64>(
-            "INSERT INTO files (project_id, file_name, storage_path, file_type, version_number, tag, file_size, file_hash, source_hash, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+        let file_id = sqlx::query_scalar::<_,  i64>(
+            "INSERT INTO files (project_id, file_name, storage_path, file_type, version_number, tag, file_size, file_hash, source_hash, uploaded_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id",
     )
     .bind(project_id)
     .bind(&filename)
@@ -703,8 +701,8 @@ pub async fn upload_file(
         .await
         .map_err(|_| ApiError::Storage)?;
 
-        crate::db::query(
-        "INSERT INTO file_search (file_id, project_id, filename, content) VALUES (?, ?, ?, ?)",
+        sqlx::query(
+        "INSERT INTO file_search (file_id, project_id, filename, content) VALUES ($1, $2, $3, $4)",
     )
     .bind(file_id)
     .bind(project_id)
@@ -712,7 +710,7 @@ pub async fn upload_file(
     .bind(text)
         .execute(&mut *transaction)
         .await?;
-        crate::db::query("UPDATE projects SET updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+        sqlx::query("UPDATE projects SET updated_at = CURRENT_TIMESTAMP WHERE id = $1")
             .bind(project_id)
             .execute(&mut *transaction)
             .await?;
@@ -729,9 +727,9 @@ pub async fn upload_file(
             return Err(error);
         }
     };
-    let item = crate::db::query_as::< FileItem>(
+    let item = sqlx::query_as::<_,  FileItem>(
         "SELECT id, version_number, file_name AS file_path, file_type, file_hash, source_hash, tag, file_size,
-            strftime('%Y-%m-%d %H:%M:%S', created_at, '+9 hours') AS created_at FROM files WHERE id = ? AND deleted_at IS NULL",
+            to_char(created_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS') AS created_at FROM files WHERE id = $1 AND deleted_at IS NULL",
     )
     .bind(file_id)
     .fetch_one(&state.pool)
@@ -741,7 +739,7 @@ pub async fn upload_file(
 }
 
 async fn touch_project_updated_at(pool: &DbPool, project_id: i64) -> Result<(), ApiError> {
-    crate::db::query("UPDATE projects SET updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+    sqlx::query("UPDATE projects SET updated_at = CURRENT_TIMESTAMP WHERE id = $1")
         .bind(project_id)
         .execute(pool)
         .await?;
@@ -753,8 +751,8 @@ pub async fn download_file(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
-    let file_info: Option<(String, i64, String)> = crate::db::query_as(
-        "SELECT storage_path, project_id, file_name FROM files WHERE id = ? AND deleted_at IS NULL",
+    let file_info: Option<(String, i64, String)> = sqlx::query_as(
+        "SELECT storage_path, project_id, file_name FROM files WHERE id = $1 AND deleted_at IS NULL",
     )
     .bind(id)
     .fetch_optional(&state.pool)
@@ -782,8 +780,8 @@ pub async fn open_file(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
-    let file_info: Option<(String, i64, String)> = crate::db::query_as(
-        "SELECT storage_path, project_id, file_name FROM files WHERE id = ? AND deleted_at IS NULL",
+    let file_info: Option<(String, i64, String)> = sqlx::query_as(
+        "SELECT storage_path, project_id, file_name FROM files WHERE id = $1 AND deleted_at IS NULL",
     )
     .bind(id)
     .fetch_optional(&state.pool)
@@ -814,18 +812,18 @@ pub async fn list_file_history(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<FileHistoryItem>>, ApiError> {
-    let file_info: Option<(String, i64)> = crate::db::query_as(
-        "SELECT file_name, project_id FROM files WHERE id = ? AND deleted_at IS NULL",
+    let file_info: Option<(String, i64)> = sqlx::query_as(
+        "SELECT file_name, project_id FROM files WHERE id = $1 AND deleted_at IS NULL",
     )
     .bind(id)
     .fetch_optional(&state.pool)
     .await?;
     let (file_name, project_id) = file_info.ok_or(ApiError::NotFound)?;
     require_history_admin(&headers, &state, project_id).await?;
-    let histories = crate::db::query_as::< FileHistoryItem>(
-        "SELECT id, version_number, file_name AS file_path, file_type, file_hash, source_hash, file_size, tag, archived_at
+    let histories = sqlx::query_as::<_,  FileHistoryItem>(
+        "SELECT id, version_number, file_name AS file_path, file_type, file_hash, source_hash, file_size, tag, to_char(archived_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS') AS archived_at
          FROM file_histories
-         WHERE project_id = ? AND file_name = ?
+         WHERE project_id = $1 AND file_name = $2
          ORDER BY version_number DESC, id DESC",
     )
     .bind(project_id)
@@ -841,23 +839,23 @@ pub async fn list_file_audit(
     headers: HeaderMap,
 ) -> Result<Json<Vec<FileAuditItem>>, ApiError> {
     authenticate_admin(&state, &headers).await?;
-    let file = crate::db::query_as::<(i64, String, String)>(
-        "SELECT project_id, file_name, file_type FROM files WHERE id = ?",
+    let file = sqlx::query_as::<_, (i64, String, String)>(
+        "SELECT project_id, file_name, file_type FROM files WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(&state.pool)
     .await?
     .ok_or(ApiError::NotFound)?;
-    let audit = crate::db::query_as::<FileAuditItem>(
+    let audit = sqlx::query_as::<_, FileAuditItem>(
         "SELECT f.version_number, f.file_name AS file_path,
-            strftime('%Y-%m-%d %H:%M:%S', f.created_at, '+9 hours') AS uploaded_at,
-            strftime('%Y-%m-%d %H:%M:%S', f.deleted_at, '+9 hours') AS deleted_at,
+            to_char(f.created_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS') AS uploaded_at,
+            to_char(f.deleted_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS') AS deleted_at,
             uploaded.username AS uploaded_by,
             deleted.username AS deleted_by
          FROM files f
          LEFT JOIN users uploaded ON uploaded.id = f.uploaded_by
          LEFT JOIN users deleted ON deleted.id = f.deleted_by
-         WHERE f.project_id = ? AND f.file_name = ? AND f.file_type = ?
+         WHERE f.project_id = $1 AND f.file_name = $2 AND f.file_type = $3
          ORDER BY f.version_number DESC, f.id DESC",
     )
     .bind(file.0)
@@ -873,8 +871,8 @@ pub async fn download_file_history(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
-    let history: Option<(String, i64, String)> = crate::db::query_as(
-        "SELECT storage_path, project_id, file_name FROM file_histories WHERE id = ?",
+    let history: Option<(String, i64, String)> = sqlx::query_as(
+        "SELECT storage_path, project_id, file_name FROM file_histories WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(&state.pool)
@@ -904,7 +902,7 @@ pub async fn update_file_tag(
     Json(request): Json<UpdateFileTagRequest>,
 ) -> Result<Json<FileItem>, ApiError> {
     let file_type: String =
-        crate::db::query_scalar("SELECT file_type FROM files WHERE id = ? AND deleted_at IS NULL")
+        sqlx::query_scalar("SELECT file_type FROM files WHERE id = $1 AND deleted_at IS NULL")
             .bind(id)
             .fetch_optional(&state.pool)
             .await?
@@ -914,14 +912,14 @@ pub async fn update_file_tag(
     if !can_move_file(&user.1, &file_type) {
         return Err(ApiError::Forbidden);
     }
-    crate::db::query("UPDATE files SET tag = ? WHERE id = ? AND deleted_at IS NULL")
+    sqlx::query("UPDATE files SET tag = $1 WHERE id = $2 AND deleted_at IS NULL")
         .bind(request.tag.trim())
         .bind(id)
         .execute(&state.pool)
         .await?;
-    let item = crate::db::query_as::< FileItem>(
+    let item = sqlx::query_as::<_,  FileItem>(
         "SELECT id, version_number, file_name AS file_path, file_type, file_hash, source_hash, tag, file_size,
-            strftime('%Y-%m-%d %H:%M:%S', created_at, '+9 hours') AS created_at FROM files WHERE id = ? AND deleted_at IS NULL",
+            to_char(created_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS') AS created_at FROM files WHERE id = $1 AND deleted_at IS NULL",
     )
     .bind(id)
     .fetch_one(&state.pool)
@@ -939,8 +937,8 @@ pub async fn delete_file(
     if !can_manage_projects(&user.1) {
         return Err(ApiError::Forbidden);
     }
-    let result = crate::db::query(
-        "UPDATE files SET deleted_at = CURRENT_TIMESTAMP, deleted_by = ? WHERE id = ? AND deleted_at IS NULL",
+    let result = sqlx::query(
+        "UPDATE files SET deleted_at = CURRENT_TIMESTAMP, deleted_by = $1 WHERE id = $2 AND deleted_at IS NULL",
     )
     .bind(user.0)
     .bind(id)
@@ -982,8 +980,8 @@ pub async fn batch_delete_files(
         return Ok(StatusCode::NO_CONTENT);
     };
     for (file_id, _, _, _) in rows {
-        crate::db::query(
-            "UPDATE files SET deleted_at = CURRENT_TIMESTAMP, deleted_by = ? WHERE id = ? AND deleted_at IS NULL",
+        sqlx::query(
+            "UPDATE files SET deleted_at = CURRENT_TIMESTAMP, deleted_by = $1 WHERE id = $2 AND deleted_at IS NULL",
         )
         .bind(deleted_by)
         .bind(file_id)
@@ -1010,7 +1008,7 @@ pub async fn batch_move_files(
         }
     }
     for (file_id, _, _, _) in rows {
-        crate::db::query("UPDATE files SET tag = ? WHERE id = ? AND deleted_at IS NULL")
+        sqlx::query("UPDATE files SET tag = $1 WHERE id = $2 AND deleted_at IS NULL")
             .bind(&tag)
             .bind(file_id)
             .execute(&state.pool)
@@ -1032,8 +1030,8 @@ pub async fn batch_download_files(
     let mut used_names = HashSet::new();
     let mut entries = Vec::with_capacity(rows.len());
     for (file_id, file_path, _, _) in rows {
-        let storage_path: String = crate::db::query_scalar(
-            "SELECT storage_path FROM files WHERE id = ? AND deleted_at IS NULL",
+        let storage_path: String = sqlx::query_scalar(
+            "SELECT storage_path FROM files WHERE id = $1 AND deleted_at IS NULL",
         )
         .bind(file_id)
         .fetch_optional(&state.pool)
@@ -1107,14 +1105,14 @@ pub async fn search_files(
     if query.is_empty() {
         return Ok(Json(Vec::new()));
     }
-    let results = crate::db::query_as::<FileSearchResult>(
+    let results = sqlx::query_as::<_, FileSearchResult>(
         "SELECT fs.file_id, fs.project_id, fs.filename,
                 left(fs.content, 160) AS snippet
          FROM file_search fs
          JOIN files f ON f.id = fs.file_id
          JOIN projects p ON p.id = fs.project_id
          WHERE to_tsvector('simple', coalesce(fs.filename, '') || ' ' || coalesce(fs.content, ''))
-             @@ plainto_tsquery('simple', ?) AND f.deleted_at IS NULL AND p.deleted_at IS NULL
+             @@ plainto_tsquery('simple', $1) AND f.deleted_at IS NULL AND p.deleted_at IS NULL
          ORDER BY fs.file_id DESC LIMIT 100",
     )
     .bind(query)
