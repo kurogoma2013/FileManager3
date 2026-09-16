@@ -8,11 +8,11 @@ services:
       POSTGRES_USER: filemanager3
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - filemanager3-postgres-data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U filemanager3 -d filemanager3"]
+      test: [ "CMD-SHELL", "pg_isready -U filemanager3 -d filemanager3" ]
       interval: 5s
       timeout: 5s
       retries: 12

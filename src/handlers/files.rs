@@ -1107,20 +1107,6 @@ pub async fn search_files(
     if query.is_empty() {
         return Ok(Json(Vec::new()));
     }
-    #[cfg(test)]
-    let results = crate::db::query_as::<FileSearchResult>(
-        "SELECT fs.file_id, fs.project_id, fs.filename,
-                snippet(file_search, 3, '<mark>', '</mark>', '…', 12) AS snippet
-         FROM file_search fs
-         JOIN files f ON f.id = fs.file_id
-         JOIN projects p ON p.id = fs.project_id
-         WHERE file_search MATCH ? AND f.deleted_at IS NULL AND p.deleted_at IS NULL
-         ORDER BY rank LIMIT 100",
-    )
-    .bind(query)
-    .fetch_all(&state.pool)
-    .await?;
-    #[cfg(not(test))]
     let results = crate::db::query_as::<FileSearchResult>(
         "SELECT fs.file_id, fs.project_id, fs.filename,
                 left(fs.content, 160) AS snippet

@@ -4,7 +4,7 @@
 
 1. `git status --short --branch` で作業ツリーを確認する。既存の変更を上書きしない。
 2. 実装と関連する詳細仕様を同じ変更として更新する。
-3. `cargo fmt --all`、`cargo test --offline`、`cargo clippy --all-targets --offline -- -D warnings`、`git diff --check` を実行する。
+3. `cargo fmt --all`、`cargo test --offline`、`cargo clippy --all-targets --offline -- -D warnings`、`git diff --check` を実行する。テストはPostgreSQLに接続するため、事前に `docker compose up -d` でテスト用DBを起動する（[テストの実行](#テストの実行)を参照）。
 4. バージョンを更新する。`Cargo.toml`を基準に、Web・Android・iOSの表示バージョンも合わせる。
 5. 実行中のサービスを再起動し、待ち受けポートとHTTPSのヘルスチェックを確認する。
 6. 変更内容を日本語のコミットメッセージでコミットする。
@@ -40,6 +40,20 @@ cargo run -- check-integrity
 - 認証・権限・入力検証はハンドラー側で行い、既存の `ApiError` と共通認証関数を利用する。
 - APIのパス、権限、ステータス、データの更新日時への影響を `docs/04_api.md` と `docs/02_permissions.md` に記載する。
 - ブラウザ画面を追加した場合は `docs/03_screens.md` と関連テンプレートの対応を更新する。
+
+## テストの実行
+
+テストはSQLiteを使わず、PostgreSQL上でテストごとに専用データベース（`filemanager3_test_<作成時刻>_<ランダム値>`）を作成して実行する。接続先は次の順で決定する。
+
+1. 環境変数 `TEST_DATABASE_URL`（管理用接続URL。同じサーバー上にテストDBを作成する）
+2. 環境変数 `POSTGRES_PASSWORD`、または `.env` の `POSTGRES_PASSWORD` を使い、`postgres://filemanager3:<パスワード>@127.0.0.1:5432/filemanager3` に接続する（ホストとポートは `TEST_DATABASE_HOST` で変更できる）
+
+```bash
+docker compose up -d
+cargo test --offline
+```
+
+作成から1時間以上経過したテストDBは、次回のテスト実行時に自動で削除する。
 
 ## 動作確認
 

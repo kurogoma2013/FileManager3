@@ -23,7 +23,7 @@ pub async fn list_project_notes(
             COALESCE(u.username, CASE WHEN pn.created_by = '' THEN 'ゲスト' ELSE pn.created_by END) as created_by,
             strftime('%Y-%m-%d %H:%M:%S', pn.created_at, '+9 hours') as created_at
          FROM project_notes pn
-         LEFT JOIN users u ON u.id = pn.created_by OR u.username = pn.created_by
+         LEFT JOIN users u ON u.id::text = pn.created_by OR u.username = pn.created_by
          WHERE pn.project_id = ? AND pn.deleted_at IS NULL
          ORDER BY pn.id DESC",
     )
@@ -53,7 +53,7 @@ pub async fn list_deleted_project_notes(
             COALESCE(u.username, CASE WHEN pn.created_by = '' THEN 'ゲスト' ELSE pn.created_by END) as created_by,
             strftime('%Y-%m-%d %H:%M:%S', pn.created_at, '+9 hours') as created_at
          FROM project_notes pn
-         LEFT JOIN users u ON u.id = pn.created_by OR u.username = pn.created_by
+         LEFT JOIN users u ON u.id::text = pn.created_by OR u.username = pn.created_by
          WHERE pn.project_id = ? AND pn.deleted_at IS NOT NULL
          ORDER BY pn.id DESC",
     )
@@ -115,7 +115,7 @@ pub async fn list_dealer_notes(
             COALESCE(u.username, CASE WHEN dn.created_by = '' THEN 'ゲスト' ELSE dn.created_by END) as created_by,
             strftime('%Y-%m-%d %H:%M:%S', dn.created_at, '+9 hours') as created_at
          FROM dealer_notes dn
-         LEFT JOIN users u ON u.id = dn.created_by OR u.username = dn.created_by
+         LEFT JOIN users u ON u.id::text = dn.created_by OR u.username = dn.created_by
          WHERE dn.dealer_id = ? AND dn.deleted_at IS NULL
          ORDER BY dn.id DESC",
     )
@@ -145,7 +145,7 @@ pub async fn list_deleted_dealer_notes(
             COALESCE(u.username, CASE WHEN dn.created_by = '' THEN 'ゲスト' ELSE dn.created_by END) as created_by,
             strftime('%Y-%m-%d %H:%M:%S', dn.created_at, '+9 hours') as created_at
          FROM dealer_notes dn
-         LEFT JOIN users u ON u.id = dn.created_by OR u.username = dn.created_by
+         LEFT JOIN users u ON u.id::text = dn.created_by OR u.username = dn.created_by
          WHERE dn.dealer_id = ? AND dn.deleted_at IS NOT NULL
          ORDER BY dn.id DESC",
     )

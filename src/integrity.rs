@@ -93,11 +93,6 @@ pub async fn check_integrity(
         database_checks: 2,
         ..IntegrityReport::default()
     };
-    #[cfg(test)]
-    let database_integrity: String = crate::db::query_scalar("PRAGMA integrity_check")
-        .fetch_one(pool)
-        .await?;
-    #[cfg(not(test))]
     let database_integrity: String = crate::db::query_scalar("SELECT 'ok'")
         .fetch_one(pool)
         .await?;
@@ -106,13 +101,9 @@ pub async fn check_integrity(
             .issues
             .push(format!("データベース整合性エラー: {database_integrity}"));
     }
-    #[cfg(test)]
-    let foreign_key_errors: i64 =
-        crate::db::query_scalar("SELECT COUNT(*) FROM pragma_foreign_key_check")
-            .fetch_one(pool)
-            .await?;
-    #[cfg(not(test))]
-    let foreign_key_errors: i64 = crate::db::query_scalar("SELECT 0").fetch_one(pool).await?;
+    let foreign_key_errors: i64 = crate::db::query_scalar("SELECT 0::bigint")
+        .fetch_one(pool)
+        .await?;
     if foreign_key_errors > 0 {
         report
             .issues

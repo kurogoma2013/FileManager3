@@ -4,14 +4,8 @@ use crate::db::DbPool;
 use crate::handlers::auth_handlers::cleanup_expired_auth_state;
 
 pub async fn prepare_database(pool: &DbPool, config: &AppConfig) -> anyhow::Result<()> {
-    #[cfg(test)]
-    sqlx::migrate!("./migrations").run(pool).await?;
-    #[cfg(not(test))]
     sqlx::migrate!("./migrations_postgres").run(pool).await?;
     cleanup_expired_auth_state(pool).await?;
-    #[cfg(test)]
-    crate::db::query("PRAGMA optimize").execute(pool).await?;
-    #[cfg(not(test))]
     crate::db::query("ANALYZE").execute(pool).await?;
     seed_admin_user(pool, config).await?;
     crate::integrity::reconcile_startup(pool, &config.storage_dir).await

@@ -1,5 +1,5 @@
-ALTER TABLE users ADD COLUMN updated_at TEXT;
+ALTER TABLE users ADD COLUMN updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text;
 
 UPDATE users
-SET updated_at = COALESCE(created_at, CURRENT_TIMESTAMP)
+SET updated_at = COALESCE(created_at, CURRENT_TIMESTAMP::text)
 WHERE updated_at IS NULL;

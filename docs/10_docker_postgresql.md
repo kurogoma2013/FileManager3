@@ -18,6 +18,8 @@ FileManager3から接続する場合は、次のURLを使用します。
 postgres://filemanager3:パスワード@127.0.0.1:＜docker-compose.ymlで公開したホスト側ポート＞/filemanager3
 ```
 
+`cargo test` もこのコンテナへ接続し、テストごとに専用データベースを作成します。詳細は[保守ガイド](00_maintenance.md#テストの実行)を参照してください。
+
 ## 状態確認
 
 ```bash

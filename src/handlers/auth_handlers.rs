@@ -106,13 +106,13 @@ pub fn clear_session_cookie(secure: bool) -> String {
 }
 
 pub async fn cleanup_expired_auth_state(pool: &DbPool) -> Result<(), sqlx::Error> {
-    crate::db::query("DELETE FROM sessions WHERE expires_at <= CURRENT_TIMESTAMP")
+    crate::db::query("DELETE FROM sessions WHERE expires_at <= datetime('now')")
         .execute(pool)
         .await?;
-    crate::db::query("DELETE FROM passkey_challenges WHERE expires_at <= CURRENT_TIMESTAMP")
+    crate::db::query("DELETE FROM passkey_challenges WHERE expires_at <= datetime('now')")
         .execute(pool)
         .await?;
-    crate::db::query("DELETE FROM auth_login_attempts WHERE window_started_at < datetime('now', '-15 minutes') AND (blocked_until IS NULL OR blocked_until <= CURRENT_TIMESTAMP)")
+    crate::db::query("DELETE FROM auth_login_attempts WHERE window_started_at < datetime('now', '-15 minutes') AND (blocked_until IS NULL OR blocked_until <= datetime('now'))")
         .execute(pool)
         .await?;
     crate::db::query("DELETE FROM oauth_states WHERE created_at <= datetime('now', '-10 minutes')")
@@ -125,7 +125,7 @@ const LOGIN_ATTEMPT_LIMIT: i64 = 5;
 
 async fn check_login_rate_limit(pool: &DbPool, username: &str) -> Result<(), ApiError> {
     let blocked: Option<i64> = crate::db::query_scalar(
-        "SELECT 1 FROM auth_login_attempts WHERE username = ? AND blocked_until > CURRENT_TIMESTAMP",
+        "SELECT 1 FROM auth_login_attempts WHERE username = ? AND blocked_until > datetime('now')",
     )
     .bind(username)
     .fetch_optional(pool)
@@ -146,7 +146,7 @@ async fn record_login_failure(pool: &DbPool, username: &str) -> Result<(), ApiEr
              ELSE auth_login_attempts.attempts + 1
            END,
            window_started_at = CASE
-             WHEN auth_login_attempts.window_started_at <= datetime('now', '-15 minutes') THEN CURRENT_TIMESTAMP
+             WHEN auth_login_attempts.window_started_at <= datetime('now', '-15 minutes') THEN datetime('now')
              ELSE auth_login_attempts.window_started_at
            END,
            blocked_until = CASE
@@ -182,7 +182,7 @@ pub async fn authenticate_headers(
         "SELECT u.id, u.role
          FROM sessions s
          JOIN users u ON u.id = s.user_id
-         WHERE s.token_hash = ? AND s.expires_at > CURRENT_TIMESTAMP AND u.active = 1",
+         WHERE s.token_hash = ? AND s.expires_at > datetime('now') AND u.active = 1",
     )
     .bind(token_hash)
     .fetch_optional(pool)
@@ -259,7 +259,7 @@ pub async fn keepalive(
     };
     let result = crate::db::query(
         "UPDATE sessions SET expires_at = datetime('now', '+1 hour')
-         WHERE token_hash = ? AND expires_at > CURRENT_TIMESTAMP",
+         WHERE token_hash = ? AND expires_at > datetime('now')",
     )
     .bind(hash_session_token(&token))
     .execute(&state.pool)
@@ -713,7 +713,7 @@ pub async fn passkey_register_finish(
     authenticate_admin(&state, &headers).await?;
     let row: Option<(i64, String)> = crate::db::query_as(
         "SELECT user_id, state_json FROM passkey_challenges
-         WHERE challenge_id = ? AND challenge_type = 'registration' AND expires_at > CURRENT_TIMESTAMP"
+         WHERE challenge_id = ? AND challenge_type = 'registration' AND expires_at > datetime('now')"
     )
     .bind(&request.challenge_id)
     .fetch_optional(&state.pool)
@@ -799,7 +799,7 @@ pub async fn passkey_login_finish(
 ) -> Result<Response, ApiError> {
     let row: Option<(i64, String)> = crate::db::query_as(
         "SELECT user_id, state_json FROM passkey_challenges
-         WHERE challenge_id = ? AND challenge_type = 'authentication' AND expires_at > CURRENT_TIMESTAMP"
+         WHERE challenge_id = ? AND challenge_type = 'authentication' AND expires_at > datetime('now')"
     )
     .bind(&request.challenge_id)
     .fetch_optional(&state.pool)
