@@ -228,21 +228,6 @@ pub(crate) async fn move_to_quarantine(
     Ok(destination)
 }
 
-pub(crate) async fn quarantine_existing_storage(storage_root: &Path) -> anyhow::Result<()> {
-    if !tokio::fs::try_exists(storage_root).await? {
-        return Ok(());
-    }
-    let mut entries = tokio::fs::read_dir(storage_root).await?;
-    while let Some(entry) = entries.next_entry().await? {
-        if entry.file_name() == QUARANTINE_DIR_NAME {
-            continue;
-        }
-        let destination = move_to_quarantine(storage_root, &entry.path()).await?;
-        tracing::warn!(source = %entry.path().display(), destination = %destination.display(), "新規DB作成前の既存ストレージを隔離しました");
-    }
-    Ok(())
-}
-
 pub(crate) async fn reconcile_startup(pool: &DbPool, storage_root: &Path) -> anyhow::Result<()> {
     tokio::fs::create_dir_all(storage_root).await?;
     let references = load_storage_references(pool).await?;

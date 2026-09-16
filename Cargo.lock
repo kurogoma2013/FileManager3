@@ -811,14 +811,12 @@ dependencies = [
 
 [[package]]
 name = "filemanager3"
-version = "0.0.2026091701"
+version = "0.0.2026091702"
 dependencies = [
  "anyhow",
  "argon2",
  "axum",
  "axum-server",
- "base64 0.22.1",
- "hex",
  "image",
  "openssl",
  "pdf-extract",

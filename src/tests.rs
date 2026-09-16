@@ -2582,15 +2582,6 @@ fn パスキーの外部OriginとHTTPS設定を環境変数で構成できる() 
     assert!(startup.contains("bind_rustls"));
 }
 
-#[test]
-fn 新規db初期化時にストレージを隔離する処理がある() {
-    let source = include_str!("app_state.rs");
-    assert!(source.contains("clear_storage_for_new_database"));
-    assert!(source.contains("database_path.exists() || !storage_dir.exists()"));
-    assert!(source.contains("quarantine_existing_storage"));
-    assert!(include_str!("integrity.rs").contains("新規DB作成前の既存ストレージを隔離しました"));
-}
-
 #[tokio::test]
 async fn 案件検索結果画面を認証済みで表示できる() {
     let pool = test_pool().await;

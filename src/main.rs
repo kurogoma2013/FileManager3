@@ -14,7 +14,6 @@ mod specifications;
 mod storage;
 mod templates;
 
-use app_state::clear_storage_for_new_database;
 #[cfg(test)]
 use app_state::prepare_database as initialize_db;
 use config::AppConfig;
@@ -45,7 +44,7 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
     config.validate_transport()?;
-    prepare_runtime_directories(&config).await?;
+    tokio::fs::create_dir_all(&config.storage_dir).await?;
 
     let pool = db::init_db(&config.database_url).await?;
     let app = create_app(pool, &config).await?;
@@ -61,12 +60,6 @@ fn init_tracing() {
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
-}
-
-async fn prepare_runtime_directories(config: &AppConfig) -> anyhow::Result<()> {
-    clear_storage_for_new_database(&config.database_url, &config.storage_dir).await?;
-    tokio::fs::create_dir_all(&config.storage_dir).await?;
-    Ok(())
 }
 
 fn print_access_urls(config: &AppConfig) {
