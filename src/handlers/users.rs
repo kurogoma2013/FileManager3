@@ -38,11 +38,10 @@ pub async fn list_local_login_usernames(
     if !is_local {
         return Err(ApiError::NotFound);
     }
-    let usernames: Vec<String> = sqlx::query_scalar(
-        "SELECT username FROM users WHERE active = 1 ORDER BY username COLLATE NOCASE ASC",
-    )
-    .fetch_all(&state.pool)
-    .await?;
+    let usernames: Vec<String> =
+        sqlx::query_scalar("SELECT username FROM users WHERE active ORDER BY LOWER(username) ASC")
+            .fetch_all(&state.pool)
+            .await?;
     Ok(Json(usernames))
 }
 
@@ -68,7 +67,7 @@ pub async fn list_users(
             COUNT(passkeys.id) as passkey_count
          FROM users
          LEFT JOIN passkeys ON passkeys.user_id = users.id
-         WHERE users.active = 1
+         WHERE users.active
          GROUP BY users.id, users.username, users.role, users.updated_at
          ORDER BY users.id ASC",
         )
@@ -79,7 +78,7 @@ pub async fn list_users(
             COUNT(passkeys.id) as passkey_count
          FROM users
          LEFT JOIN passkeys ON passkeys.user_id = users.id
-         WHERE users.active = 1 AND users.id = $1
+         WHERE users.active AND users.id = $1
          GROUP BY users.id, users.username, users.role, users.updated_at
          ORDER BY users.id ASC",
         )
@@ -100,7 +99,7 @@ pub async fn list_deleted_users(
             COUNT(passkeys.id) as passkey_count
          FROM users
          LEFT JOIN passkeys ON passkeys.user_id = users.id
-         WHERE users.active = 0
+         WHERE NOT users.active
          GROUP BY users.id, users.username, users.role, users.updated_at
          ORDER BY users.id ASC",
     )
@@ -207,7 +206,7 @@ pub async fn delete_user(
     }
 
     let target_role: Option<String> =
-        sqlx::query_scalar("SELECT role FROM users WHERE id = $1 AND active = 1")
+        sqlx::query_scalar("SELECT role FROM users WHERE id = $1 AND active")
             .bind(id)
             .fetch_optional(&state.pool)
             .await?;
@@ -222,7 +221,7 @@ pub async fn delete_user(
 
     let mut transaction = state.pool.begin().await?;
     let result = sqlx::query(
-        "UPDATE users SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND active = 1",
+        "UPDATE users SET active = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND active",
     )
     .bind(id)
     .execute(&mut *transaction)
@@ -244,7 +243,7 @@ pub async fn permanently_delete_user(
     headers: HeaderMap,
 ) -> Result<StatusCode, ApiError> {
     authenticate_admin(&state, &headers).await?;
-    let result = sqlx::query("DELETE FROM users WHERE id = $1 AND active = 0")
+    let result = sqlx::query("DELETE FROM users WHERE id = $1 AND NOT active")
         .bind(id)
         .execute(&state.pool)
         .await?;

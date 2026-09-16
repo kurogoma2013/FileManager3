@@ -18,12 +18,11 @@ pub async fn authenticate_credentials(
     username: &str,
     password: &str,
 ) -> anyhow::Result<Option<(i64, String)>> {
-    let row: Option<(i64, String, String)> = sqlx::query_as(
-        "SELECT id, password_hash, role FROM users WHERE username = $1 AND active = 1",
-    )
-    .bind(username)
-    .fetch_optional(pool)
-    .await?;
+    let row: Option<(i64, String, String)> =
+        sqlx::query_as("SELECT id, password_hash, role FROM users WHERE username = $1 AND active")
+            .bind(username)
+            .fetch_optional(pool)
+            .await?;
     let Some((id, password_hash, role)) = row else {
         tracing::warn!(username = %username, "user not found or inactive");
         let dummy_hash = PasswordHash::new("$argon2id$v=19$m=19456,t=2,p=1$w2N4VpQeN5C6Z3X8Y2qPZw$V9nO/9kQZ1aN5cM9T4jV7P1H9dG3zB8mX1yL3R4vE9c").unwrap();

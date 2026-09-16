@@ -184,7 +184,7 @@ pub async fn authenticate_headers(
         "SELECT u.id, u.role
          FROM sessions s
          JOIN users u ON u.id = s.user_id
-         WHERE s.token_hash = $1 AND s.expires_at > CURRENT_TIMESTAMP AND u.active = 1",
+         WHERE s.token_hash = $1 AND s.expires_at > CURRENT_TIMESTAMP AND u.active",
     )
     .bind(token_hash)
     .fetch_optional(pool)
@@ -474,7 +474,7 @@ async fn find_or_create_google_user(
     email: &str,
 ) -> Result<Option<i64>, ApiError> {
     let mut transaction = pool.begin().await?;
-    let identity_user: Option<(i64, i64)> = sqlx::query_as(
+    let identity_user: Option<(i64, bool)> = sqlx::query_as(
         "SELECT u.id, u.active
          FROM oauth_identities i JOIN users u ON u.id = i.user_id
          WHERE i.provider = 'google' AND i.subject = $1",
@@ -484,16 +484,16 @@ async fn find_or_create_google_user(
     .await?;
     if let Some((user_id, active)) = identity_user {
         transaction.commit().await?;
-        return Ok((active == 1).then_some(user_id));
+        return Ok(active.then_some(user_id));
     }
 
-    let existing_user: Option<(i64, i64)> =
+    let existing_user: Option<(i64, bool)> =
         sqlx::query_as("SELECT id, active FROM users WHERE username = $1")
             .bind(email)
             .fetch_optional(&mut *transaction)
             .await?;
     let user_id = if let Some((user_id, active)) = existing_user {
-        if active != 1 {
+        if !active {
             transaction.commit().await?;
             return Ok(None);
         }
@@ -591,7 +591,7 @@ pub async fn me(
     let auth_user = authenticate_request(&state, &headers).await?;
 
     let user: Option<(i64, String, String)> =
-        sqlx::query_as("SELECT id, username, role FROM users WHERE id = $1 AND active = 1")
+        sqlx::query_as("SELECT id, username, role FROM users WHERE id = $1 AND active")
             .bind(auth_user.0)
             .fetch_optional(&state.pool)
             .await?;
@@ -760,7 +760,7 @@ pub async fn passkey_login_start(
     cleanup_expired_auth_state(&state.pool).await?;
     let username = request.username.trim();
     let user: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM users WHERE username = $1 AND active = 1")
+        sqlx::query_as("SELECT id FROM users WHERE username = $1 AND active")
             .bind(username)
             .fetch_optional(&state.pool)
             .await?;

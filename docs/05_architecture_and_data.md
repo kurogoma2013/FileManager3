@@ -17,7 +17,7 @@
 - **PostgreSQL**: 外部キー制約、トランザクション、インデックス、全文検索を活用。SQLはPostgreSQLネイティブ（`$1` プレースホルダ、`CURRENT_TIMESTAMP ± INTERVAL`、`to_char(... AT TIME ZONE 'Asia/Tokyo')`）で記述し、SQLite互換関数は使用しない
 - **日時型**: 日時列はすべて `TIMESTAMPTZ`（UTC）で保存し、表示時に日本時間へ変換する。`files.uploaded_by` / `deleted_by` は `users.id` への外部キー（ユーザー物理削除時はNULL）
 - **全文検索**: `file_search` に `to_tsvector('simple', ...)` のGINインデックスを持つ
-- **論理削除**: 案件・販売店・ファイル・ユーザー・メモは `active = 0` または `deleted_at` で管理
+- **論理削除**: 案件・販売店・ファイル・ユーザー・メモは `active = FALSE`（BOOLEAN）または `deleted_at` で管理
 - **ファイル監査情報**: ファイルのアップロード実行ユーザーIDを `files.uploaded_by`、論理削除実行ユーザーIDを `files.deleted_by` に内部保存する。既存ファイルなど実行ユーザーを特定できないレコードはNULLを許容する
 - **監査情報の確認**: 管理者だけがファイル操作メニューから各版のアップロード者・論理削除者を確認できる。監査取得APIも管理者専用とする
 - **物理削除**: 管理者だけが削除済みデータを確認操作付きで物理削除できる。案件・ファイル削除時はDBの共有参照を確認し、未参照の物理ファイルだけを `.quarantine/` へ隔離する

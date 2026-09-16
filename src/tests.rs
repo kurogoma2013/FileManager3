@@ -434,7 +434,7 @@ fn ユーザー管理画面にownerロールを表示しない() {
     assert!(USER_REGISTRATION_HTML.contains("admin（管理ユーザー）"));
     assert!(USER_REGISTRATION_HTML.contains("viewer（閲覧ユーザー）"));
     assert!(USER_REGISTRATION_HTML.contains("deleteUser"));
-    assert!(include_str!("handlers/users.rs").contains("UPDATE users SET active = 0"));
+    assert!(include_str!("handlers/users.rs").contains("UPDATE users SET active = FALSE"));
     assert!(USER_REGISTRATION_HTML.contains("u.passkey_count"));
     assert!(USER_REGISTRATION_HTML.contains("u.passkey_count>0"));
     let rendered = templates::render_page(USER_REGISTRATION_HTML);
@@ -482,12 +482,11 @@ async fn 管理ユーザーは管理者以外から削除できない() {
         .await
         .unwrap();
     assert_eq!(response.status(), axum::http::StatusCode::FORBIDDEN);
-    assert_eq!(
-        sqlx::query_scalar::<_, i32>("SELECT active FROM users WHERE id = 1")
+    assert!(
+        sqlx::query_scalar::<_, bool>("SELECT active FROM users WHERE id = 1")
             .fetch_one(&pool)
             .await
-            .unwrap(),
-        1
+            .unwrap()
     );
     assert!(!can_delete_user_target("member", "admin"));
     assert!(can_delete_user_target("admin", "admin"));
@@ -1762,7 +1761,7 @@ fn 案件検索のソート条件は許可された順序だけを使う() {
     );
     assert_eq!(
         project_order_by(Some("name_desc")),
-        "name COLLATE NOCASE DESC, id DESC"
+        "LOWER(name) DESC, id DESC"
     );
     assert_eq!(
         project_order_by(Some("unknown")),

@@ -48,8 +48,8 @@ pub struct SearchParams {
 pub(crate) fn project_order_by(value: Option<&str>) -> &'static str {
     match value.unwrap_or("updated_desc") {
         "updated_asc" => "updated_at ASC, id ASC",
-        "name_asc" => "name COLLATE NOCASE ASC, id DESC",
-        "name_desc" => "name COLLATE NOCASE DESC, id DESC",
+        "name_asc" => "LOWER(name) ASC, id DESC",
+        "name_desc" => "LOWER(name) DESC, id DESC",
         "number_asc" => "project_number ASC, id DESC",
         "number_desc" => "project_number DESC, id DESC",
         _ => "updated_at DESC, id DESC",

@@ -1,6 +1,6 @@
 [package]
 name = "filemanager3"
-version = "0.0.2026091705"
+version = "0.0.2026091706"
 edition = "2021"
 
 [dependencies]
