@@ -16,6 +16,8 @@ Nginx + Let's Encrypt
 FileManager3
 ```
 
+リバースプロキシに Nginx ではなく Apache を使う場合は、この文書の 1〜9 を実施した後に [Ubuntu・Apache 設定](11_ubuntu_apache.md) へ進んでください。
+
 この手順では、取得済みの証明書に合わせて `goma2013.com` を使用します。別のドメインを使う場合は、手順中の `goma2013.com` をすべて実際のドメインへ置き換えてください。
 
 | 値 | 例 | 説明 |

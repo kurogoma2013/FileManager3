@@ -66,4 +66,4 @@ curl --insecure --fail --silent --show-error https://127.0.0.1:3000/
 lsof -nP -iTCP:3000 -sTCP:LISTEN
 ```
 
-本番の更新は `scripts/update.sh` を使用する。Ubuntu、systemd、Nginx、Let's Encryptの構築手順は [Ubuntu・Let's Encrypt 設定](09_ubuntu_letsencrypt.md) にまとめている。
+本番の更新は `scripts/update.sh` を使用する。Ubuntu、systemd、Nginx、Let's Encryptの構築手順は [Ubuntu・Let's Encrypt 設定](09_ubuntu_letsencrypt.md) にまとめている。リバースプロキシにApacheを使う場合は [Ubuntu・Apache 設定](11_ubuntu_apache.md) を参照する。

@@ -69,6 +69,11 @@ const SPECIFICATIONS: &[Specification] = &[
         title: "Docker PostgreSQL",
         body: include_str!("../docs/10_docker_postgresql.md"),
     },
+    Specification {
+        slug: "11_ubuntu_apache",
+        title: "Ubuntu・Apache 設定",
+        body: include_str!("../docs/11_ubuntu_apache.md"),
+    },
 ];
 
 fn escape_html(value: &str) -> String {

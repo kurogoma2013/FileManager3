@@ -4,7 +4,7 @@
 
 ## 現行バージョン
 
-`0.0.2026091703`（2026-09-17）
+`0.0.2026091704`（2026-09-17）
 
 ## 1. 概要
 案件を中心に、書類・写真・動画・メモ・販売店・担当者・ユーザーを管理するLAN対応Webアプリケーション。
@@ -36,5 +36,5 @@ SECURE_COOKIE=true TLS_CERT_PATH=cert.pem TLS_KEY_PATH=key.pem HOST=0.0.0.0 PORT
 
 ## 詳細仕様
 - [保守ガイド](00_maintenance.md) | [システム概要](01_overview.md) | [権限仕様](02_permissions.md) | [画面仕様](03_screens.md) | [API仕様](04_api.md)
-- [アーキテクチャ・データ](05_architecture_and_data.md) | [設定・起動](06_configuration.md) | [Ubuntu・Let's Encrypt 設定](09_ubuntu_letsencrypt.md)
+- [アーキテクチャ・データ](05_architecture_and_data.md) | [設定・起動](06_configuration.md) | [Ubuntu・Let's Encrypt 設定](09_ubuntu_letsencrypt.md) | [Ubuntu・Apache 設定](11_ubuntu_apache.md)
 - [Android版](07_android.md) | [iOS版](08_ios.md)
