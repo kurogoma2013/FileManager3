@@ -49,6 +49,26 @@ const SPECIFICATIONS: &[Specification] = &[
         title: "設定・起動",
         body: include_str!("../docs/06_configuration.md"),
     },
+    Specification {
+        slug: "07_android",
+        title: "Android版",
+        body: include_str!("../docs/07_android.md"),
+    },
+    Specification {
+        slug: "08_ios",
+        title: "iOS版",
+        body: include_str!("../docs/08_ios.md"),
+    },
+    Specification {
+        slug: "09_ubuntu_letsencrypt",
+        title: "Ubuntu・Let's Encrypt 設定",
+        body: include_str!("../docs/09_ubuntu_letsencrypt.md"),
+    },
+    Specification {
+        slug: "10_docker_postgresql",
+        title: "Docker PostgreSQL",
+        body: include_str!("../docs/10_docker_postgresql.md"),
+    },
 ];
 
 fn escape_html(value: &str) -> String {

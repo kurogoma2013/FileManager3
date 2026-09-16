@@ -10,12 +10,12 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Dockerコンテナはホストの5433番ポートへ公開します。ネイティブPostgreSQLの5432番ポートと同時に利用できます。
+接続ポートは `docker-compose.yml` の `ports` で管理します。ホスト側にPostgreSQLを起動している場合は、使用中でないポートへ変更してから起動してください。
 
 FileManager3から接続する場合は、次のURLを使用します。
 
 ```text
-postgres://filemanager3:パスワード@127.0.0.1:5433/filemanager3
+postgres://filemanager3:パスワード@127.0.0.1:＜docker-compose.ymlで公開したホスト側ポート＞/filemanager3
 ```
 
 ## 状態確認

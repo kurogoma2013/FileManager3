@@ -284,6 +284,8 @@ fn 仕様書リンクを全画面の管理サイドメニューへ補完する()
     assert!(html.contains("href=\"/admin/specifications\""));
     assert!(html.contains("['01_overview','システム概要']"));
     assert!(html.contains("['06_configuration','設定・起動']"));
+    assert!(html.contains("['07_android','Android版']"));
+    assert!(html.contains("['10_docker_postgresql','Docker PostgreSQL']"));
 }
 
 #[test]
@@ -1459,6 +1461,8 @@ async fn 管理者専用の仕様書画面を公開する() {
     assert!(specifications.contains("if role != \"admin\""));
     assert!(specifications.contains("01_overview"));
     assert!(specifications.contains("06_configuration"));
+    assert!(specifications.contains("07_android"));
+    assert!(specifications.contains("10_docker_postgresql"));
     assert!(specifications.contains("render_markdown(spec.body)"));
 }
 
