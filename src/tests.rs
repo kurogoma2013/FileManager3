@@ -618,11 +618,6 @@ fn ログイン画面はユーザー名入力後にパスキー認証を開始�
     assert!(LOGIN_HTML.contains("autocomplete=\"username webauthn\""));
     assert!(LOGIN_HTML.contains("isConditionalMediationAvailable"));
     assert!(LOGIN_HTML.contains("options.mediation=\"conditional\""));
-    assert!(LOGIN_HTML.contains("/api/login-usernames"));
-    assert!(LOGIN_HTML.contains("id=\"local-usernames\""));
-    assert!(LOGIN_HTML.contains("setAttribute(\"list\",\"local-usernames\")"));
-    assert!(LOGIN_HTML.contains("setupLocalUsernameSelect"));
-    assert!(LOGIN_HTML.contains("localhost"));
     assert!(LOGIN_HTML.contains("passkeyDomainAvailable"));
     assert!(LOGIN_HTML.contains("パスキーはIPアドレスでは使用できません"));
 }

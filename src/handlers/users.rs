@@ -4,7 +4,7 @@ use crate::handlers::auth_handlers::{authenticate_admin, authenticate_headers};
 use crate::models::{ApiError, AppState, CreateUserRequest, UpdateUserRequest};
 use axum::{
     extract::{Path, State},
-    http::{header, HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode},
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -23,26 +23,6 @@ pub struct UserSummary {
 pub struct GrantPermissionRequest {
     pub user_id: i64,
     pub permission: String,
-}
-
-pub async fn list_local_login_usernames(
-    State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
-) -> Result<Json<Vec<String>>, ApiError> {
-    let host = headers
-        .get(header::HOST)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or_default();
-    let is_local =
-        host.starts_with("localhost") || host.starts_with("127.0.0.1") || host.starts_with("[::1]");
-    if !is_local {
-        return Err(ApiError::NotFound);
-    }
-    let usernames: Vec<String> =
-        sqlx::query_scalar("SELECT username FROM users WHERE active ORDER BY LOWER(username) ASC")
-            .fetch_all(&state.pool)
-            .await?;
-    Ok(Json(usernames))
 }
 
 pub fn valid_user_role(role: &str) -> bool {

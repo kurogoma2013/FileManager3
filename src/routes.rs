@@ -80,10 +80,6 @@ fn register_routes(state: Arc<AppState>) -> Router {
             "/api/access-urls",
             get(handlers::auth_handlers::access_urls),
         )
-        .route(
-            "/api/login-usernames",
-            get(handlers::users::list_local_login_usernames),
-        )
         .route("/api/android/latest", get(handlers::android::latest))
         .route(
             "/android/filemanager3-android-release.apk",
