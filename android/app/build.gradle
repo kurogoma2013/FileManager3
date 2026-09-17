@@ -7,9 +7,9 @@ if (keystorePropertiesFile.exists()) {
 }
 def releaseSigningReady = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].every { keystoreProperties[it] }
 
-android { namespace 'jp.filemanager3.android'; compileSdk 36
+android { namespace 'jp.filemanager.android'; compileSdk 36
     buildFeatures { buildConfig true }
-    defaultConfig { applicationId 'jp.filemanager3.android'; minSdk 26; targetSdk 36; versionCode 2026091805; versionName '0.0.2026091805' }
+    defaultConfig { applicationId 'jp.filemanager.android'; minSdk 26; targetSdk 36; versionCode 2026091806; versionName '0.0.2026091806' }
     signingConfigs {
         if (releaseSigningReady) {
             release {

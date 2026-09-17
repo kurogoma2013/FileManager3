@@ -15,7 +15,7 @@ final class OfflineCache {
 
     init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        root = appSupport.appendingPathComponent("FileManager3Offline", isDirectory: true)
+        root = appSupport.appendingPathComponent("FileManagerOffline", isDirectory: true)
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         cleanupExpired()
     }

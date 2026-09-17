@@ -1,4 +1,4 @@
-package jp.filemanager3.android;
+package jp.filemanager.android;
 
 import android.content.ContentResolver;
 import android.net.Uri;

@@ -1,4 +1,4 @@
-package jp.filemanager3.android;
+package jp.filemanager.android;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -15,7 +15,7 @@ final class OfflineCache {
     private final File root;
 
     OfflineCache(Context context) {
-        preferences = context.getSharedPreferences("filemanager3_offline", Context.MODE_PRIVATE);
+        preferences = context.getSharedPreferences("filemanager_offline", Context.MODE_PRIVATE);
         root = new File(context.getFilesDir(), "offline-projects");
     }
 
