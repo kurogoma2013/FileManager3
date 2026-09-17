@@ -2,13 +2,13 @@
 set -euo pipefail
 
 # FileManager3 の本番更新スクリプト（Ubuntu + systemd 用）
-# 例: sudo FILEMANAGER_DATA_DIR=/var/lib/filemanager3/data ./scripts/update.sh
+# 例: sudo FILEMANAGER_DATA_DIR=/var/lib/filemanager/data ./scripts/update.sh
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SERVICE_NAME="${FILEMANAGER_SERVICE:-filemanager3}"
-RUN_USER="${FILEMANAGER_RUN_USER:-filemanager3}"
-DATA_DIR="${FILEMANAGER_DATA_DIR:-/var/lib/filemanager3/data}"
-BACKUP_DIR="${FILEMANAGER_BACKUP_DIR:-/var/backups/filemanager3}"
+SERVICE_NAME="${FILEMANAGER_SERVICE:-filemanager}"
+RUN_USER="${FILEMANAGER_RUN_USER:-filemanager}"
+DATA_DIR="${FILEMANAGER_DATA_DIR:-/var/lib/filemanager/data}"
+BACKUP_DIR="${FILEMANAGER_BACKUP_DIR:-/var/backups/filemanager}"
 HEALTH_URL="${FILEMANAGER_HEALTH_URL:-https://127.0.0.1:3000/}"
 
 log() {
@@ -35,12 +35,12 @@ run_as_app_user() {
 backup_data() {
   local timestamp database_name storage_dir backup_root backup_file storage_archive
   timestamp="$(date '+%Y%m%d-%H%M%S')"
-  database_name="${FILEMANAGER_DB_NAME:-filemanager3}"
+  database_name="${FILEMANAGER_DB_NAME:-filemanager}"
   storage_dir="${FILEMANAGER_STORAGE_DIR:-$DATA_DIR/storage}"
   [ -d "$storage_dir" ] || fail "ストレージが見つかりません: $storage_dir"
 
   install -d -m 750 "$BACKUP_DIR"
-  backup_root="$BACKUP_DIR/filemanager3-${timestamp}"
+  backup_root="$BACKUP_DIR/filemanager-${timestamp}"
   install -d -m 750 "$backup_root"
   backup_file="$backup_root/database.dump"
   run_as_app_user pg_dump --format=custom --file="$backup_file" "$database_name"

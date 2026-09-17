@@ -56,7 +56,7 @@ curl --insecure --fail https://127.0.0.1:3000/
 ## 2. Apache のサイト設定を作成する
 
 ```bash
-sudo nano /etc/apache2/sites-available/filemanager3.conf
+sudo nano /etc/apache2/sites-available/filemanager.conf
 ```
 
 証明書取得前は HTTP の VirtualHost を作成します。既定の `000-default` サイトに同じドメインが設定されている場合は、FileManager3 専用 VPS であることを確認してから無効化します。
@@ -88,8 +88,8 @@ sudo a2dissite 000-default
 
     RequestHeader set X-Forwarded-Proto "https"
 
-    ErrorLog ${APACHE_LOG_DIR}/filemanager3-error.log
-    CustomLog ${APACHE_LOG_DIR}/filemanager3-access.log combined
+    ErrorLog ${APACHE_LOG_DIR}/filemanager-error.log
+    CustomLog ${APACHE_LOG_DIR}/filemanager-access.log combined
 </VirtualHost>
 ```
 
@@ -100,7 +100,7 @@ sudo a2dissite 000-default
 有効化して、設定を確認します。
 
 ```bash
-sudo a2ensite filemanager3
+sudo a2ensite filemanager
 sudo apachectl configtest
 sudo systemctl reload apache2
 curl --fail --silent --show-error -I http://goma2013.com
@@ -108,7 +108,7 @@ curl --fail --silent --show-error -I http://goma2013.com
 
 ### 証明書を取得済みの場合
 
-`sudo certbot certificates` で対象ドメインの証明書が表示される場合は、Certbot を再実行せず、その証明書を Apache に設定できます。`/etc/apache2/sites-available/filemanager3.conf` を次の内容にします。
+`sudo certbot certificates` で対象ドメインの証明書が表示される場合は、Certbot を再実行せず、その証明書を Apache に設定できます。`/etc/apache2/sites-available/filemanager.conf` を次の内容にします。
 
 ```apache
 <VirtualHost *:80>
@@ -138,8 +138,8 @@ curl --fail --silent --show-error -I http://goma2013.com
 
     RequestHeader set X-Forwarded-Proto "https"
 
-    ErrorLog ${APACHE_LOG_DIR}/filemanager3-error.log
-    CustomLog ${APACHE_LOG_DIR}/filemanager3-access.log combined
+    ErrorLog ${APACHE_LOG_DIR}/filemanager-error.log
+    CustomLog ${APACHE_LOG_DIR}/filemanager-access.log combined
 </VirtualHost>
 ```
 
@@ -166,7 +166,7 @@ sudo snap install --classic certbot
 sudo ln -s /snap/bin/certbot /usr/local/bin/certbot
 ```
 
-Apache の設定を自動更新し、HTTP から HTTPS へリダイレクトします。Certbot は `filemanager3.conf` を元に `filemanager3-le-ssl.conf` を生成して有効化します。
+Apache の設定を自動更新し、HTTP から HTTPS へリダイレクトします。Certbot は `filemanager.conf` を元に `filemanager-le-ssl.conf` を生成して有効化します。
 
 ```bash
 sudo certbot --apache -d goma2013.com --redirect
@@ -191,8 +191,8 @@ curl --fail --silent --show-error -I https://goma2013.com
 アップロードが失敗する場合は、`LimitRequestBody` が `104857600`（100MB）以上であることと、次のログを確認します。
 
 ```bash
-sudo tail -n 100 /var/log/apache2/filemanager3-error.log
-sudo journalctl -u filemanager3 -n 100 --no-pager
+sudo tail -n 100 /var/log/apache2/filemanager-error.log
+sudo journalctl -u filemanager -n 100 --no-pager
 ```
 
 `502 Proxy Error` や `SSL Proxy requested for ... but not enabled` が記録される場合は、`ssl` モジュールが有効で `SSLProxyEngine on` が VirtualHost 内に設定されていること、FileManager3 が `127.0.0.1:3000` で待ち受けていることを確認します。

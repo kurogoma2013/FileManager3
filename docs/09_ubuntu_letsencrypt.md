@@ -24,8 +24,8 @@ FileManager3
 | --- | --- | --- |
 | `goma2013.com` | `goma2013.com` | FileManager3 にアクセスする公開ドメイン |
 | `VPSのIPv4アドレス` | `203.0.113.10` | KAGOYA VPS の固定 IPv4 アドレス |
-| `filemanager3` | `filemanager3` | FileManager3 を実行する Linux ユーザー |
-| `/opt/filemanager3` | `/opt/filemanager3` | FileManager3 の配置先 |
+| `filemanager` | `filemanager` | FileManager3 を実行する Linux ユーザー |
+| `/opt/filemanager` | `/opt/filemanager` | FileManager3 の配置先 |
 
 ## 1. VPS に接続して OS を確認する
 
@@ -47,21 +47,21 @@ sudo apt full-upgrade -y
 sudo apt install -y \
   build-essential cargo git libpq-dev nginx openssl pkg-config postgresql ufw
 
-sudo adduser --system --group --home /opt/filemanager3 \
-  --shell /usr/sbin/nologin filemanager3
-sudo install -d -m 750 -o filemanager3 -g filemanager3 \
-  /opt/filemanager3 /var/lib/filemanager3/data/storage \
-  /etc/filemanager3/tls
+sudo adduser --system --group --home /opt/filemanager \
+  --shell /usr/sbin/nologin filemanager
+sudo install -d -m 750 -o filemanager -g filemanager \
+  /opt/filemanager /var/lib/filemanager/data/storage \
+  /etc/filemanager/tls
 
 sudo -u postgres psql <<'SQL'
-CREATE USER filemanager3 WITH PASSWORD 'データベース用の強いパスワード';
-CREATE DATABASE filemanager3 OWNER filemanager3;
+CREATE USER filemanager WITH PASSWORD 'データベース用の強いパスワード';
+CREATE DATABASE filemanager OWNER filemanager;
 SQL
 ```
 
 FileManager3はPostgreSQLを使用します。アプリケーション用DBユーザーとDBを作成し、パスワードは環境ファイルへ安全に設定します。
 
-`filemanager3` はサービス専用ユーザーです。既に専用ユーザーを作成済みの場合は、既存のユーザー名を以降のコマンドで使用してください。
+`filemanager` はサービス専用ユーザーです。既に専用ユーザーを作成済みの場合は、既存のユーザー名を以降のコマンドで使用してください。
 
 ## 3. DNS を設定する
 
@@ -112,56 +112,56 @@ KAGOYA のセキュリティグループと Ubuntu の UFW の両方で通信が
 GitHub からソースコードを取得し、リリースビルドを作成します。
 
 ```bash
-sudo -u filemanager3 git clone \
+sudo -u filemanager git clone \
   https://github.com/kurogoma2013/FileManager3.git \
-  /opt/filemanager3/source
+  /opt/filemanager/source
 
-sudo -u filemanager3 sh -c \
-  'cd /opt/filemanager3/source && cargo build --locked --release'
+sudo -u filemanager sh -c \
+  'cd /opt/filemanager/source && cargo build --locked --release'
 ```
 
 ビルドが完了すると、実行ファイルは次の場所に作成されます。
 
 ```text
-/opt/filemanager3/source/target/release/FileManager
+/opt/filemanager/source/target/release/FileManager
 ```
 
 ## 7. FileManager3 の内部用証明書を作成する
 
 FileManager3 は HTTPS 起動が必要です。Nginx と FileManager3 は同じ VPS の loopback 接続なので、FileManager3 側には内部通信用の自己署名証明書を使用します。
 
-以下の `filemanager3` は実際の実行ユーザーに置き換えてください。サービスユーザーで手動起動する場合は、証明書をそのユーザーが読み取れる場所に作成してください。
+以下の `filemanager` は実際の実行ユーザーに置き換えてください。サービスユーザーで手動起動する場合は、証明書をそのユーザーが読み取れる場所に作成してください。
 
 ```bash
-sudo -u filemanager3 openssl req -x509 -nodes -newkey rsa:2048 \
+sudo -u filemanager openssl req -x509 -nodes -newkey rsa:2048 \
   -days 3650 \
-  -keyout /etc/filemanager3/tls/backend.key \
-  -out /etc/filemanager3/tls/backend.crt \
+  -keyout /etc/filemanager/tls/backend.key \
+  -out /etc/filemanager/tls/backend.crt \
   -subj "/CN=localhost" \
   -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
 
-sudo chmod 640 /etc/filemanager3/tls/backend.key
+sudo chmod 640 /etc/filemanager/tls/backend.key
 ```
 
 `proxy_ssl_verify off` は、Nginx から loopback の内部用自己署名証明書へ接続するための設定です。外部サーバーを upstream にする場合は使用しないでください。
 
 ## 8. FileManager3 の環境ファイルを作成する
 
-`/etc/filemanager3/filemanager3.env` を作成します。
+`/etc/filemanager/filemanager.env` を作成します。
 
 ```bash
-sudo nano /etc/filemanager3/filemanager3.env
+sudo nano /etc/filemanager/filemanager.env
 ```
 
 ```text
-DATABASE_URL=postgres://filemanager3:データベース用の強いパスワード@127.0.0.1/filemanager3
+DATABASE_URL=postgres://filemanager:データベース用の強いパスワード@127.0.0.1/filemanager
 FILE_STORAGE_DIR=./data/storage
 HOST=127.0.0.1
 PORT=3000
 ADMIN_PASSWORD=初回ログイン用の強いパスワード
 SECURE_COOKIE=true
-TLS_CERT_PATH=/etc/filemanager3/tls/backend.crt
-TLS_KEY_PATH=/etc/filemanager3/tls/backend.key
+TLS_CERT_PATH=/etc/filemanager/tls/backend.crt
+TLS_KEY_PATH=/etc/filemanager/tls/backend.key
 WEBAUTHN_RP_ID=goma2013.com
 WEBAUTHN_ORIGIN=https://goma2013.com
 ```
@@ -173,15 +173,15 @@ WEBAUTHN_ORIGIN=https://goma2013.com
 環境ファイルの権限を制限します。
 
 ```bash
-sudo chown root:filemanager3 /etc/filemanager3/filemanager3.env
-sudo chmod 640 /etc/filemanager3/filemanager3.env
+sudo chown root:filemanager /etc/filemanager/filemanager.env
+sudo chmod 640 /etc/filemanager/filemanager.env
 
 sudo install -d -m 750 \
-  -o filemanager3 -g filemanager3 \
-  /var/lib/filemanager3 \
-  /var/lib/filemanager3/data \
-  /var/lib/filemanager3/data/storage
-sudo chown -R filemanager3:filemanager3 /var/lib/filemanager3
+  -o filemanager -g filemanager \
+  /var/lib/filemanager \
+  /var/lib/filemanager/data \
+  /var/lib/filemanager/data/storage
+sudo chown -R filemanager:filemanager /var/lib/filemanager
 ```
 
 ## 9. systemd で FileManager3 を起動する
@@ -189,28 +189,28 @@ sudo chown -R filemanager3:filemanager3 /var/lib/filemanager3
 サービス定義を作成します。
 
 ```bash
-sudo nano /etc/systemd/system/filemanager3.service
+sudo nano /etc/systemd/system/filemanager.service
 ```
 
 ```ini
 [Unit]
-Description=FileManager3
+Description=FileManager
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=filemanager3
-Group=filemanager3
-WorkingDirectory=/var/lib/filemanager3
-EnvironmentFile=/etc/filemanager3/filemanager3.env
-ExecStart=/opt/filemanager3/source/target/release/FileManager
+User=filemanager
+Group=filemanager
+WorkingDirectory=/var/lib/filemanager
+EnvironmentFile=/etc/filemanager/filemanager.env
+ExecStart=/opt/filemanager/source/target/release/FileManager
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
-ReadWritePaths=/var/lib/filemanager3
+ReadWritePaths=/var/lib/filemanager
 
 [Install]
 WantedBy=multi-user.target
@@ -220,9 +220,9 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now filemanager3
-sudo systemctl status filemanager3 --no-pager
-sudo journalctl -u filemanager3 -n 100 --no-pager
+sudo systemctl enable --now filemanager
+sudo systemctl status filemanager --no-pager
+sudo journalctl -u filemanager -n 100 --no-pager
 ```
 
 内部 HTTPS を確認します。
@@ -234,14 +234,14 @@ curl --insecure --fail https://127.0.0.1:3000/
 初回起動が成功し、管理者パスワードを設定できたことを確認したら、環境ファイルから初期パスワードを削除します。既存 DB では不要です。
 
 ```bash
-sudo sed -i '/^ADMIN_PASSWORD=/d' /etc/filemanager3/filemanager3.env
-sudo systemctl restart filemanager3
+sudo sed -i '/^ADMIN_PASSWORD=/d' /etc/filemanager/filemanager.env
+sudo systemctl restart filemanager
 ```
 
 ## 10. Nginx を設定する
 
 ```bash
-sudo nano /etc/nginx/sites-available/filemanager3
+sudo nano /etc/nginx/sites-available/filemanager
 ```
 
 証明書取得前は HTTP の server block を作成します。既定の `default` サイトに同じドメインが設定されている場合は、FileManager3 専用 VPS であることを確認してから無効化します。
@@ -283,8 +283,8 @@ server {
 有効化して、設定を確認します。
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/filemanager3 \
-  /etc/nginx/sites-enabled/filemanager3
+sudo ln -s /etc/nginx/sites-available/filemanager \
+  /etc/nginx/sites-enabled/filemanager
 
 sudo nginx -t
 sudo systemctl reload nginx
@@ -292,7 +292,7 @@ sudo systemctl reload nginx
 
 ### 証明書を取得済みの場合
 
-`sudo certbot certificates` で対象ドメインの証明書が表示される場合は、Certbot を再実行せず、その証明書を Nginx に設定できます。`/etc/nginx/sites-available/filemanager3` を次の内容にします。
+`sudo certbot certificates` で対象ドメインの証明書が表示される場合は、Certbot を再実行せず、その証明書を Nginx に設定できます。`/etc/nginx/sites-available/filemanager` を次の内容にします。
 
 ```nginx
 server {
@@ -378,7 +378,7 @@ curl --fail --silent --show-error -I https://goma2013.com
 
 ```bash
 sudo journalctl -u nginx -n 100 --no-pager
-sudo journalctl -u filemanager3 -n 100 --no-pager
+sudo journalctl -u filemanager -n 100 --no-pager
 ```
 
 ## 13. 更新時の手順
@@ -386,15 +386,15 @@ sudo journalctl -u filemanager3 -n 100 --no-pager
 新しいバージョンを配置する場合は、まずPostgreSQLのダンプとストレージを同一更新単位で保存し、ソースコードを更新してビルドした後、サービスを再起動します。バックアップ先はアクセス制限した保存先を使用してください。
 
 ```bash
-sudo install -d -m 750 /var/backups/filemanager3
-sudo -u filemanager3 pg_dump --format=custom --file=/var/backups/filemanager3/database.dump filemanager3
-sudo tar -C /var/lib/filemanager3/data -czf /var/backups/filemanager3/storage.tar.gz storage
-sudo systemctl stop filemanager3
-sudo -u filemanager3 git -C /opt/filemanager3/source pull --ff-only
-sudo -u filemanager3 sh -c \
-  'cd /opt/filemanager3/source && cargo build --locked --release'
-sudo systemctl start filemanager3
-sudo systemctl status filemanager3 --no-pager
+sudo install -d -m 750 /var/backups/filemanager
+sudo -u filemanager pg_dump --format=custom --file=/var/backups/filemanager/database.dump filemanager
+sudo tar -C /var/lib/filemanager/data -czf /var/backups/filemanager/storage.tar.gz storage
+sudo systemctl stop filemanager
+sudo -u filemanager git -C /opt/filemanager/source pull --ff-only
+sudo -u filemanager sh -c \
+  'cd /opt/filemanager/source && cargo build --locked --release'
+sudo systemctl start filemanager
+sudo systemctl status filemanager --no-pager
 ```
 
 ## 参考資料
