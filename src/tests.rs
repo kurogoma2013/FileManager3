@@ -589,11 +589,11 @@ async fn viewerは自分のユーザー情報だけ編集できる() {
 
 #[test]
 fn データベース整合性対策を適用する() {
-    let migration = include_str!("../migrations/20260917000000_init.sql");
+    let schema = include_str!("../db/schema.sql");
     let update_script = include_str!("../scripts/update.sh");
     let startup = include_str!("main.rs");
-    assert!(migration.contains("REFERENCES dealers(name) ON UPDATE CASCADE ON DELETE CASCADE"));
-    assert!(migration.contains("CREATE INDEX idx_files_hash_active"));
+    assert!(schema.contains("REFERENCES dealers(name) ON UPDATE CASCADE ON DELETE CASCADE"));
+    assert!(schema.contains("CREATE INDEX IF NOT EXISTS idx_files_hash_active"));
     assert!(include_str!("maintenance.rs").contains("STORAGE_OPERATION_LOCK"));
     assert!(include_str!("handlers/files.rs").contains("created_storage_path"));
     assert!(include_str!("handlers/auth_handlers.rs").contains("cleanup_expired_auth_state"));
@@ -636,14 +636,14 @@ fn googleログインは設定時だけログイン画面に表示する() {
 fn google_oauthの認証ルートと安全策を登録する() {
     let routes = include_str!("routes.rs");
     let auth = include_str!("handlers/auth_handlers.rs");
-    let migration = include_str!("../migrations/20260917000000_init.sql");
+    let schema = include_str!("../db/schema.sql");
     assert!(routes.contains("/auth/google"));
     assert!(routes.contains("/auth/google/callback"));
     assert!(auth.contains("oauth_states"));
     assert!(auth.contains("CURRENT_TIMESTAMP - INTERVAL '10 minutes'"));
     assert!(auth.contains("email_verified == Some(true)"));
     assert!(auth.contains("openidconnect.googleapis.com/v1/userinfo"));
-    assert!(migration.contains("UNIQUE(provider, subject)"));
+    assert!(schema.contains("UNIQUE(provider, subject)"));
 }
 
 #[test]
