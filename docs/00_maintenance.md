@@ -21,7 +21,7 @@ cargo run -- check-integrity
 
 | 場所 | 責務 | 変更の目安 |
 | --- | --- | --- |
-| `src/main.rs` | ロギング、設定読込、DB接続、HTTPS待ち受け | 起動方法・TLS・ディレクトリ準備 |
+| `src/main.rs` | ロギング、設定読込、DB接続、HTTPS待ち受け。実行ファイル名は `FileManager`（`Cargo.toml` の `[[bin]]`） | 起動方法・TLS・ディレクトリ準備 |
 | `src/routes.rs` | WebAuthn状態の構築、Axum Router、共通ミドルウェア | 画面/APIのパス追加・変更 |
 | `src/handlers/` | 認証、案件、販売店、メモ、ファイル、ユーザーのHTTP処理 | APIの入力・権限・レスポンス |
 | `src/app_state.rs` | DBマイグレーション、初期管理者作成、起動時のストレージ整合性確認 | 起動時のDB準備 |

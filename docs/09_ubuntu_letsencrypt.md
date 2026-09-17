@@ -123,7 +123,7 @@ sudo -u filemanager3 sh -c \
 ビルドが完了すると、実行ファイルは次の場所に作成されます。
 
 ```text
-/opt/filemanager3/source/target/release/filemanager3
+/opt/filemanager3/source/target/release/FileManager
 ```
 
 ## 7. FileManager3 の内部用証明書を作成する
@@ -204,7 +204,7 @@ User=filemanager3
 Group=filemanager3
 WorkingDirectory=/var/lib/filemanager3
 EnvironmentFile=/etc/filemanager3/filemanager3.env
-ExecStart=/opt/filemanager3/source/target/release/filemanager3
+ExecStart=/opt/filemanager3/source/target/release/FileManager
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

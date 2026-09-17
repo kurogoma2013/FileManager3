@@ -1,7 +1,11 @@
 [package]
 name = "filemanager3"
-version = "0.0.2026091801"
+version = "0.0.2026091802"
 edition = "2021"
+
+[[bin]]
+name = "FileManager"
+path = "src/main.rs"
 
 [dependencies]
 axum = { version = "0.7", features = ["multipart"] }
