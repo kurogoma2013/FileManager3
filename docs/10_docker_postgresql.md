@@ -15,7 +15,7 @@ docker compose up -d
 FileManager3から接続する場合は、次のURLを使用します。
 
 ```text
-postgres://filemanager3:パスワード@127.0.0.1:＜docker-compose.ymlで公開したホスト側ポート＞/filemanager3
+postgres://filemanager:パスワード@127.0.0.1:＜docker-compose.ymlで公開したホスト側ポート＞/filemanager
 ```
 
 `cargo test` もこのコンテナへ接続し、テストごとに専用データベースを作成します。詳細は[保守ガイド](00_maintenance.md#テストの実行)を参照してください。
@@ -24,7 +24,7 @@ postgres://filemanager3:パスワード@127.0.0.1:＜docker-compose.ymlで公開
 
 ```bash
 docker compose ps
-docker compose exec filemanager3-postgres pg_isready -U filemanager3 -d filemanager3
+docker compose exec filemanager-postgres pg_isready -U filemanager -d filemanager
 ```
 
 ## スキーマ更新時の再作成

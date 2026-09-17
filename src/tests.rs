@@ -23,7 +23,7 @@ use templates::{
 };
 use tower::ServiceExt;
 
-const TEST_DATABASE_PREFIX: &str = "filemanager3_test_";
+const TEST_DATABASE_PREFIX: &str = "filemanager_test_";
 static STALE_TEST_DATABASES: Once = Once::new();
 
 /// テスト用PostgreSQLの管理DB接続URL。
@@ -47,7 +47,7 @@ fn admin_database_url() -> String {
         .unwrap_or_default();
     let host = std::env::var("TEST_DATABASE_HOST").unwrap_or_else(|_| "127.0.0.1:5432".into());
     format!(
-        "postgres://filemanager3:{}@{host}/filemanager3",
+        "postgres://filemanager:{}@{host}/filemanager",
         percent_encode(&password)
     )
 }
@@ -86,7 +86,7 @@ async fn test_pool() -> DbPool {
     STALE_TEST_DATABASES.call_once(|| cleanup = true);
     if cleanup {
         let names: Vec<String> = sqlx::query_scalar(
-            "SELECT datname FROM pg_database WHERE datname LIKE 'filemanager3_test_%'",
+            "SELECT datname FROM pg_database WHERE datname LIKE 'filemanager_test_%'",
         )
         .fetch_all(&admin)
         .await

@@ -43,10 +43,10 @@ cargo run -- check-integrity
 
 ## テストの実行
 
-テストはSQLiteを使わず、PostgreSQL上でテストごとに専用データベース（`filemanager3_test_<作成時刻>_<ランダム値>`）を作成して実行する。接続先は次の順で決定する。
+テストはSQLiteを使わず、PostgreSQL上でテストごとに専用データベース（`filemanager_test_<作成時刻>_<ランダム値>`）を作成して実行する。接続先は次の順で決定する。
 
 1. 環境変数 `TEST_DATABASE_URL`（管理用接続URL。同じサーバー上にテストDBを作成する）
-2. 環境変数 `POSTGRES_PASSWORD`、または `.env` の `POSTGRES_PASSWORD` を使い、`postgres://filemanager3:<パスワード>@127.0.0.1:5432/filemanager3` に接続する（ホストとポートは `TEST_DATABASE_HOST` で変更できる）
+2. 環境変数 `POSTGRES_PASSWORD`、または `.env` の `POSTGRES_PASSWORD` を使い、`postgres://filemanager:<パスワード>@127.0.0.1:5432/filemanager` に接続する（ホストとポートは `TEST_DATABASE_HOST` で変更できる）
 
 ```bash
 docker compose up -d

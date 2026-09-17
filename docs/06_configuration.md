@@ -6,7 +6,7 @@
 
 | 環境変数 / キー | 説明 | 既定値 |
 | --- | --- | --- |
-| `DATABASE_URL` / `database_url` | PostgreSQL接続URL | `postgres://filemanager3:パスワード@127.0.0.1/filemanager3` |
+| `DATABASE_URL` / `database_url` | PostgreSQL接続URL | `postgres://filemanager:パスワード@127.0.0.1/filemanager` |
 | `FILE_STORAGE_DIR` / `storage_dir` | 共通ファイル保存ディレクトリ（隔離先は配下の`.quarantine`） | `./data/storage` |
 | `HOST` / `bind_address` | 待ち受けアドレス | `0.0.0.0` |
 | `PORT` / `port` | 待ち受けポート | `3000` |
@@ -47,7 +47,7 @@ cargo run
 Ubuntuのsystemd環境では、リポジトリの `scripts/update.sh` を使用して更新します。ソースコードの取得、リリースビルド、PostgreSQLの論理バックアップとストレージのバックアップ、サービス再起動、HTTPS疎通確認を自動で行います。
 
 ```bash
-cd /opt/filemanager3/source
+cd /opt/filemanager/source
 sudo ./scripts/update.sh
 ```
 

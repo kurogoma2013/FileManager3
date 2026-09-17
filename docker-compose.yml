@@ -1,21 +1,21 @@
 services:
-  filemanager3-postgres:
+  filemanager-postgres:
     image: postgres:18
-    container_name: filemanager3-postgres
+    container_name: filemanager-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: filemanager3
-      POSTGRES_USER: filemanager3
+      POSTGRES_DB: filemanager
+      POSTGRES_USER: filemanager
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
       - "5432:5432"
     volumes:
-      - filemanager3-postgres-data:/var/lib/postgresql
+      - filemanager-postgres-data:/var/lib/postgresql
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U filemanager3 -d filemanager3" ]
+      test: [ "CMD-SHELL", "pg_isready -U filemanager -d filemanager" ]
       interval: 5s
       timeout: 5s
       retries: 12
 
 volumes:
-  filemanager3-postgres-data:
+  filemanager-postgres-data:
