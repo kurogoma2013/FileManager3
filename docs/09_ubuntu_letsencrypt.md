@@ -168,6 +168,14 @@ WEBAUTHN_ORIGIN=https://goma2013.com
 
 `WEBAUTHN_RP_ID` と `WEBAUTHN_ORIGIN` には、利用者がブラウザで開く公開ドメインを設定します。`localhost` や `:3000` は設定しません。
 
+DB パスワードに `#` `@` `/` `:` `?` `%` などの記号が含まれる場合は、`DATABASE_URL` に書く前に URL エンコードします。エンコードしないと起動時に `error with configuration: invalid port number` で失敗します。
+
+```bash
+python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' 'データベース用の強いパスワード'
+```
+
+出力された文字列（例: `Pass%23word`）を `DATABASE_URL` のパスワード部分に使用します。
+
 初回起動時は、空のPostgreSQLデータベースに `admin` ユーザーが作成されます。既存DBの管理者パスワードは起動時に上書きされません。
 
 環境ファイルの権限を制限します。
@@ -380,6 +388,27 @@ curl --fail --silent --show-error -I https://goma2013.com
 sudo journalctl -u nginx -n 100 --no-pager
 sudo journalctl -u filemanager -n 100 --no-pager
 ```
+
+### 502 Bad Gateway が表示される場合
+
+Nginx は動いていて、後ろの FileManager が `127.0.0.1:3000` で応答していない状態です。FileManager のログで原因を確認します。
+
+```bash
+sudo systemctl status filemanager --no-pager
+sudo journalctl -u filemanager -n 50 --no-pager
+sudo ss -ltnp | grep 3000
+```
+
+| journal のメッセージ | 原因 | 対処 |
+| --- | --- | --- |
+| `error with configuration: invalid port number` | `DATABASE_URL` のパスワードに記号が含まれ、URL として解釈できない | 手順 8 のとおりパスワードを URL エンコードする |
+| `password authentication failed` / `database "filemanager" does not exist` | DB 名・ユーザー・パスワードが PostgreSQL と一致しない | `sudo -u postgres psql -c '\l'` で実在する DB を確認し、`DATABASE_URL` を合わせる |
+| `初回起動にはADMIN_PASSWORDの設定が必要です` | 空の DB に対する初回起動 | 環境ファイルに `ADMIN_PASSWORD=` を追加して再起動し、ログイン確認後に削除する |
+| `migration ... was previously applied but is missing` | 旧スキーマで作成した DB を使用している | データが不要なら `sudo -u postgres psql -c "DROP DATABASE filemanager;" -c "CREATE DATABASE filemanager OWNER filemanager;"` で作り直す。必要なら先に `pg_dump` で退避する |
+| `HTTPSにはTLS_CERT_PATHが必要です` | `EnvironmentFile` が読み込まれていない | サービス定義の `EnvironmentFile=` と環境ファイルのパスを一致させる |
+| `No such file or directory`（証明書） | `TLS_CERT_PATH` / `TLS_KEY_PATH` のファイルが無いか読めない | 手順 7 で証明書を作成し、実行ユーザーが読める権限にする |
+
+修正後は `sudo systemctl restart filemanager` で再起動し、`curl --insecure -I https://127.0.0.1:3000/` が `200` を返すことを確認します。
 
 ## 13. 更新時の手順
 

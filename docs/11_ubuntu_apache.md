@@ -195,7 +195,7 @@ sudo tail -n 100 /var/log/apache2/filemanager-error.log
 sudo journalctl -u filemanager -n 100 --no-pager
 ```
 
-`502 Proxy Error` や `SSL Proxy requested for ... but not enabled` が記録される場合は、`ssl` モジュールが有効で `SSLProxyEngine on` が VirtualHost 内に設定されていること、FileManager3 が `127.0.0.1:3000` で待ち受けていることを確認します。
+`502 Proxy Error` や `SSL Proxy requested for ... but not enabled` が記録される場合は、`ssl` モジュールが有効で `SSLProxyEngine on` が VirtualHost 内に設定されていること、FileManager3 が `127.0.0.1:3000` で待ち受けていることを確認します。FileManager 側が起動していない場合の切り分けは [Ubuntu・Let's Encrypt 設定](09_ubuntu_letsencrypt.md) の「502 Bad Gateway が表示される場合」を参照してください。
 
 ```bash
 sudo apachectl -M | grep -E 'ssl|proxy'

@@ -6,7 +6,7 @@
 
 | 環境変数 / キー | 説明 | 既定値 |
 | --- | --- | --- |
-| `DATABASE_URL` / `database_url` | PostgreSQL接続URL | `postgres://filemanager:パスワード@127.0.0.1/filemanager` |
+| `DATABASE_URL` / `database_url` | PostgreSQL接続URL。パスワードに `#` `@` `/` `:` `?` `%` などの記号を含む場合は URL エンコードする（未エンコードだと起動時に `invalid port number` で失敗） | `postgres://filemanager:パスワード@127.0.0.1/filemanager` |
 | `FILE_STORAGE_DIR` / `storage_dir` | 共通ファイル保存ディレクトリ（隔離先は配下の`.quarantine`） | `./data/storage` |
 | `HOST` / `bind_address` | 待ち受けアドレス | `0.0.0.0` |
 | `PORT` / `port` | 待ち受けポート | `3000` |

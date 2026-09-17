@@ -10,6 +10,8 @@ cp .env.example .env
 docker compose up -d
 ```
 
+パスワードに記号（`#` `@` など）を含む場合、`DATABASE_URL` に書くときは URL エンコードします（`.env` の `POSTGRES_PASSWORD` はそのままで構いません。テストはエンコードを自動で行います）。
+
 接続ポートは `docker-compose.yml` の `ports` で管理します。ホスト側にPostgreSQLを起動している場合は、使用中でないポートへ変更してから起動してください。
 
 FileManager3から接続する場合は、次のURLを使用します。
