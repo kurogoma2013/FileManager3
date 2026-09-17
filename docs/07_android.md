@@ -16,7 +16,7 @@
 cd android
 ./gradlew --no-daemon copyDebugApk
 ```
-生成先: `dist/filemanager3-android-debug.apk`
+生成先: `dist/filemanager-android-debug.apk`
 
 ### release署名ビルド
 - `android/keystore.properties`（Git管理外）に`storeFile`、`storePassword`、`keyAlias`、`keyPassword`を設定する。
@@ -25,7 +25,7 @@ cd android
 cd android
 ./gradlew --no-daemon copyReleaseApk
 ```
-生成先: `dist/android-release/filemanager3-android-release.apk`
+生成先: `dist/android-release/filemanager-android-release.apk`
 - アプリ更新時は同じ署名鍵を継続して使用する。署名鍵を紛失すると既存アプリを更新できない。
 
 ### ビルド環境
@@ -37,7 +37,7 @@ cd android
 ## 接続・制約
 - 既定の接続先: `https://goma2013.com`（アプリ内部で固定し、ログイン画面には表示しない）
 - ログイン画面: Web版と同じ背景色・中央配置・カード型パネル・ブランド表示・入力欄・ボタン余白に揃える。オフライン表示などAndroid固有の操作はWeb版にないため、ログインカード内の追加ボタンとして提供する。
-- 自動アップデート: 起動時に`GET /api/android/latest`で更新を確認し、更新があればHTTPSでAPKを取得する。取得後はSHA-256を検証してAndroidのインストール画面を開く。APKは`FILEMANAGER_ANDROID_RELEASE_DIR`（未設定時は`dist/android-release`）の`filemanager3-android-release.apk`を配布する。
+- 自動アップデート: 起動時に`GET /api/android/latest`で更新を確認し、更新があればHTTPSでAPKを取得する。取得後はSHA-256を検証してAndroidのインストール画面を開く。APKは`FILEMANAGER_ANDROID_RELEASE_DIR`（未設定時は`dist/android-release`）の`filemanager-android-release.apk`を配布する。
 - リリースビルド時に`latest.json`も同じディレクトリへ生成する。`latest.json`とAPKは同じリリースの組み合わせでサーバーへ配置する。
 - APK配布: `copyReleaseApk`で作成した署名済みAPKをサーバーの配布ディレクトリへ配置する。既存アプリを更新するには、毎回同じ署名鍵を使用し、`versionCode`を増加させる。Android 8以降では初回のみ、このアプリからのインストール許可が必要で、インストールの最終確認は端末で行う。
 - HTTPS必須（証明書が信頼されている必要があります）

@@ -8,7 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::{env, path::PathBuf};
 
-const APK_FILE_NAME: &str = "filemanager3-android-release.apk";
+const APK_FILE_NAME: &str = "filemanager-android-release.apk";
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AndroidUpdateManifest {

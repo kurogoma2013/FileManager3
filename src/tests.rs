@@ -1564,7 +1564,7 @@ fn android_apk配布ルートを公開する() {
     let android_handler = std::fs::read_to_string("src/handlers/android.rs").unwrap();
     let android_doc = std::fs::read_to_string("docs/07_android.md").unwrap();
     assert!(routes.contains("/api/android/latest"));
-    assert!(routes.contains("/android/filemanager3-android-release.apk"));
+    assert!(routes.contains("/android/filemanager-android-release.apk"));
     assert!(android_handler.contains("FILEMANAGER_ANDROID_RELEASE_DIR"));
     assert!(android_handler.contains("latest.json"));
     assert!(android_doc.contains("SHA-256"));

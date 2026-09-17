@@ -82,7 +82,7 @@ fn register_routes(state: Arc<AppState>) -> Router {
         )
         .route("/api/android/latest", get(handlers::android::latest))
         .route(
-            "/android/filemanager3-android-release.apk",
+            "/android/filemanager-android-release.apk",
             get(handlers::android::release_apk),
         )
         .route(

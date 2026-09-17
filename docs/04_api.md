@@ -18,7 +18,7 @@
 | POST | `/api/logout-on-close` | ウィンドウ終了時ログアウト |
 | GET | `/api/access-urls` | PC・LAN用URL取得 |
 | GET | `/api/android/latest` | Android最新版のバージョン、APK URL、SHA-256、サイズ、更新内容を取得（未配置時は404） |
-| GET | `/android/filemanager3-android-release.apk` | 署名済みAndroid APKを取得（未配置時は404） |
+| GET | `/android/filemanager-android-release.apk` | 署名済みAndroid APKを取得（未配置時は404） |
 | POST | `/api/passkeys/*` | パスキー登録・ログイン |
 
 ## データ操作

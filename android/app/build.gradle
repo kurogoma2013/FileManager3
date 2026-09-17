@@ -9,7 +9,7 @@ def releaseSigningReady = ['storeFile', 'storePassword', 'keyAlias', 'keyPasswor
 
 android { namespace 'jp.filemanager3.android'; compileSdk 36
     buildFeatures { buildConfig true }
-    defaultConfig { applicationId 'jp.filemanager3.android'; minSdk 26; targetSdk 36; versionCode 2026091804; versionName '0.0.2026091804' }
+    defaultConfig { applicationId 'jp.filemanager3.android'; minSdk 26; targetSdk 36; versionCode 2026091805; versionName '0.0.2026091805' }
     signingConfigs {
         if (releaseSigningReady) {
             release {
@@ -38,18 +38,18 @@ tasks.register('copyDebugApk', Copy) {
     dependsOn('assembleDebug')
     from(layout.buildDirectory.file('outputs/apk/debug/app-debug.apk'))
     into(rootProject.projectDir.parentFile.toPath().resolve('dist'))
-    rename { 'filemanager3-android-debug.apk' }
+    rename { 'filemanager-android-debug.apk' }
 }
 
 tasks.register('copyReleaseApk', Copy) {
     dependsOn('assembleRelease')
     from(layout.buildDirectory.file('outputs/apk/release/app-release.apk'))
     into(rootProject.projectDir.parentFile.toPath().resolve('dist/android-release'))
-    rename { 'filemanager3-android-release.apk' }
+    rename { 'filemanager-android-release.apk' }
     doLast {
-        def apk = rootProject.projectDir.parentFile.toPath().resolve('dist/android-release/filemanager3-android-release.apk').toFile()
+        def apk = rootProject.projectDir.parentFile.toPath().resolve('dist/android-release/filemanager-android-release.apk').toFile()
         def digest = java.security.MessageDigest.getInstance('SHA-256').digest(apk.bytes).collect { String.format('%02x', it & 0xff) }.join()
-        def manifest = "{\"version_code\":${android.defaultConfig.versionCode},\"version_name\":\"${android.defaultConfig.versionName}\",\"download_url\":\"/android/filemanager3-android-release.apk\",\"sha256\":\"${digest}\",\"size_bytes\":${apk.length()},\"release_notes\":\"FileManager3 Android版の最新版\"}\n"
+        def manifest = "{\"version_code\":${android.defaultConfig.versionCode},\"version_name\":\"${android.defaultConfig.versionName}\",\"download_url\":\"/android/filemanager-android-release.apk\",\"sha256\":\"${digest}\",\"size_bytes\":${apk.length()},\"release_notes\":\"FileManager3 Android版の最新版\"}\n"
         new File(apk.parentFile, 'latest.json').text = manifest
     }
 }
