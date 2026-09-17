@@ -24,14 +24,14 @@ cargo run -- check-integrity
 | `src/main.rs` | ロギング、設定読込、DB接続、HTTPS待ち受け | 起動方法・TLS・ディレクトリ準備 |
 | `src/routes.rs` | WebAuthn状態の構築、Axum Router、共通ミドルウェア | 画面/APIのパス追加・変更 |
 | `src/handlers/` | 認証、案件、販売店、メモ、ファイル、ユーザーのHTTP処理 | APIの入力・権限・レスポンス |
-| `src/app_state.rs` | スキーマ適用、初期管理者作成、起動時のストレージ整合性確認 | 起動時のDB準備 |
+| `src/app_state.rs` | DBマイグレーション、初期管理者作成、起動時のストレージ整合性確認 | 起動時のDB準備 |
 | `src/db.rs` | PostgreSQL接続プールとトランザクション共通処理 | DB接続設定 |
 | `src/storage.rs` | ファイル名の安全性判定 | ストレージの入力検証 |
 | `src/integrity.rs` | DB・ストレージ検査、起動時の未確定ファイル隔離、隔離ディレクトリ管理 | 整合性検査・復旧 |
 | `src/core.rs` | ロールと操作権限の判定 | 権限ルール |
 | `src/templates.rs` / `src/templates/` | HTMLテンプレートと共通UI補正 | 画面構造・共通表示 |
 | `src/specifications.rs` | `docs/*.md` の管理者向け表示 | 仕様書の表示方式 |
-| `db/schema.sql` | PostgreSQLスキーマ。`CREATE ... IF NOT EXISTS` で記述し、起動時に毎回適用する。列追加など既存テーブルの変更は `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` を同ファイル末尾に追記する | テーブル・インデックス変更 |
+| `migrations/` | PostgreSQLスキーマ（`20260917000000_init.sql` に統合済み）。以降の変更は新しいマイグレーションとして追加する | テーブル・インデックス変更 |
 | `docker-compose.yml` | 開発用PostgreSQLコンテナ | `docs/10_docker_postgresql.md` |
 
 ## ルートを追加する場合

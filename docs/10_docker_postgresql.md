@@ -29,7 +29,7 @@ docker compose exec filemanager3-postgres pg_isready -U filemanager3 -d filemana
 
 ## スキーマ更新時の再作成
 
-スキーマは `db/schema.sql` を起動時に適用します。以前の sqlx マイグレーション履歴（`_sqlx_migrations`）を持つデータベースは互換性がないため、開発用DBはボリュームごと削除して作り直します。
+スキーマを `migrations/20260917000000_init.sql` に統合したため、それ以前のマイグレーション履歴を持つデータベースはそのまま使用できません。開発用DBはボリュームごと削除して作り直します。
 
 ```bash
 docker compose down -v

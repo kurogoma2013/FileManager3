@@ -3,11 +3,8 @@ use crate::config::AppConfig;
 use crate::db::DbPool;
 use crate::handlers::auth_handlers::cleanup_expired_auth_state;
 
-/// PostgreSQLスキーマ。CREATE ... IF NOT EXISTS で記述し、起動のたびに適用する。
-const SCHEMA_SQL: &str = include_str!("../db/schema.sql");
-
 pub async fn prepare_database(pool: &DbPool, config: &AppConfig) -> anyhow::Result<()> {
-    sqlx::raw_sql(SCHEMA_SQL).execute(pool).await?;
+    sqlx::migrate!("./migrations").run(pool).await?;
     cleanup_expired_auth_state(pool).await?;
     sqlx::query("ANALYZE").execute(pool).await?;
     seed_admin_user(pool, config).await?;

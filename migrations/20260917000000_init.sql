@@ -1,7 +1,7 @@
 -- FileManager3 PostgreSQL スキーマ
 -- 日時はすべて TIMESTAMPTZ（UTC）で保存し、表示時に Asia/Tokyo へ変換する。
 
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE users (
     id BIGSERIAL PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS sessions (
+CREATE TABLE sessions (
     id BIGSERIAL PRIMARY KEY,
     token_hash TEXT NOT NULL UNIQUE,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires_at TIMESTAMPTZ NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS passkeys (
+CREATE TABLE passkeys (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     credential_id TEXT NOT NULL UNIQUE,
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS passkeys (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS passkey_challenges (
+CREATE TABLE passkey_challenges (
     challenge_id TEXT PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     challenge_type TEXT NOT NULL,
@@ -36,19 +36,19 @@ CREATE TABLE IF NOT EXISTS passkey_challenges (
     expires_at TIMESTAMPTZ NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS auth_login_attempts (
+CREATE TABLE auth_login_attempts (
     username TEXT PRIMARY KEY,
     attempts INTEGER NOT NULL DEFAULT 0,
     window_started_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     blocked_until TIMESTAMPTZ
 );
 
-CREATE TABLE IF NOT EXISTS oauth_states (
+CREATE TABLE oauth_states (
     state TEXT PRIMARY KEY,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS oauth_identities (
+CREATE TABLE oauth_identities (
     id BIGSERIAL PRIMARY KEY,
     provider TEXT NOT NULL,
     subject TEXT NOT NULL,
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS oauth_identities (
     UNIQUE(provider, subject)
 );
 
-CREATE TABLE IF NOT EXISTS dealers (
+CREATE TABLE dealers (
     id BIGSERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     kana TEXT NOT NULL DEFAULT '',
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS dealers (
 );
 
 -- 担当者は案件が参照する販売店名に紐づける（販売店名の変更・削除に追従）
-CREATE TABLE IF NOT EXISTS dealer_contacts (
+CREATE TABLE dealer_contacts (
     id BIGSERIAL PRIMARY KEY,
     dealer_name TEXT NOT NULL REFERENCES dealers(name) ON UPDATE CASCADE ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS dealer_contacts (
     deleted_at TIMESTAMPTZ
 );
 
-CREATE TABLE IF NOT EXISTS projects (
+CREATE TABLE projects (
     id BIGSERIAL PRIMARY KEY,
     project_number TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS projects (
     deleted_at TIMESTAMPTZ
 );
 
-CREATE TABLE IF NOT EXISTS files (
+CREATE TABLE files (
     id BIGSERIAL PRIMARY KEY,
     project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     file_name TEXT NOT NULL,
@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS files (
     deleted_at TIMESTAMPTZ
 );
 
-CREATE TABLE IF NOT EXISTS file_histories (
+CREATE TABLE file_histories (
     id BIGSERIAL PRIMARY KEY,
     file_id BIGINT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
     project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -132,14 +132,14 @@ CREATE TABLE IF NOT EXISTS file_histories (
     archived_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS file_search (
+CREATE TABLE file_search (
     file_id BIGINT PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,
     project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     filename TEXT NOT NULL,
     content TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS project_notes (
+CREATE TABLE project_notes (
     id BIGSERIAL PRIMARY KEY,
     project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
@@ -148,7 +148,7 @@ CREATE TABLE IF NOT EXISTS project_notes (
     deleted_at TIMESTAMPTZ
 );
 
-CREATE TABLE IF NOT EXISTS dealer_notes (
+CREATE TABLE dealer_notes (
     id BIGSERIAL PRIMARY KEY,
     dealer_id BIGINT NOT NULL REFERENCES dealers(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
@@ -157,7 +157,7 @@ CREATE TABLE IF NOT EXISTS dealer_notes (
     deleted_at TIMESTAMPTZ
 );
 
-CREATE TABLE IF NOT EXISTS project_permissions (
+CREATE TABLE project_permissions (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -165,26 +165,26 @@ CREATE TABLE IF NOT EXISTS project_permissions (
     UNIQUE(user_id, project_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
-CREATE INDEX IF NOT EXISTS idx_passkey_challenges_expiry ON passkey_challenges(expires_at);
-CREATE INDEX IF NOT EXISTS idx_auth_login_attempts_blocked_until ON auth_login_attempts(blocked_until);
-CREATE INDEX IF NOT EXISTS idx_oauth_states_created_at ON oauth_states(created_at);
-CREATE INDEX IF NOT EXISTS idx_oauth_identities_user_id ON oauth_identities(user_id);
-CREATE INDEX IF NOT EXISTS idx_projects_deleted_at ON projects(deleted_at);
-CREATE INDEX IF NOT EXISTS idx_projects_dealer_active ON projects(dealer, deleted_at);
-CREATE INDEX IF NOT EXISTS idx_dealers_deleted_at ON dealers(deleted_at);
-CREATE INDEX IF NOT EXISTS idx_dealer_contacts_name_active ON dealer_contacts(dealer_name, name, deleted_at);
-CREATE INDEX IF NOT EXISTS idx_files_project_active ON files(project_id, deleted_at);
-CREATE INDEX IF NOT EXISTS idx_files_project_type ON files(project_id, deleted_at, file_type);
-CREATE INDEX IF NOT EXISTS idx_files_hash ON files(file_hash);
+CREATE INDEX idx_sessions_expiry ON sessions(expires_at);
+CREATE INDEX idx_passkey_challenges_expiry ON passkey_challenges(expires_at);
+CREATE INDEX idx_auth_login_attempts_blocked_until ON auth_login_attempts(blocked_until);
+CREATE INDEX idx_oauth_states_created_at ON oauth_states(created_at);
+CREATE INDEX idx_oauth_identities_user_id ON oauth_identities(user_id);
+CREATE INDEX idx_projects_deleted_at ON projects(deleted_at);
+CREATE INDEX idx_projects_dealer_active ON projects(dealer, deleted_at);
+CREATE INDEX idx_dealers_deleted_at ON dealers(deleted_at);
+CREATE INDEX idx_dealer_contacts_name_active ON dealer_contacts(dealer_name, name, deleted_at);
+CREATE INDEX idx_files_project_active ON files(project_id, deleted_at);
+CREATE INDEX idx_files_project_type ON files(project_id, deleted_at, file_type);
+CREATE INDEX idx_files_hash ON files(file_hash);
 -- 物理ファイルは案件ごとに共有するため file_hash は一意にせず、共有参照と有効行の検索に使う
-CREATE INDEX IF NOT EXISTS idx_files_hash_active ON files(file_hash, deleted_at);
-CREATE INDEX IF NOT EXISTS idx_files_source_hash ON files(project_id, source_hash);
-CREATE INDEX IF NOT EXISTS idx_files_uploaded_by ON files(uploaded_by);
-CREATE INDEX IF NOT EXISTS idx_files_deleted_by ON files(deleted_by);
-CREATE INDEX IF NOT EXISTS idx_file_histories_file_id ON file_histories(file_id);
-CREATE INDEX IF NOT EXISTS idx_file_histories_project ON file_histories(project_id);
-CREATE INDEX IF NOT EXISTS idx_file_search_fts ON file_search
+CREATE INDEX idx_files_hash_active ON files(file_hash, deleted_at);
+CREATE INDEX idx_files_source_hash ON files(project_id, source_hash);
+CREATE INDEX idx_files_uploaded_by ON files(uploaded_by);
+CREATE INDEX idx_files_deleted_by ON files(deleted_by);
+CREATE INDEX idx_file_histories_file_id ON file_histories(file_id);
+CREATE INDEX idx_file_histories_project ON file_histories(project_id);
+CREATE INDEX idx_file_search_fts ON file_search
     USING GIN (to_tsvector('simple', coalesce(filename, '') || ' ' || coalesce(content, '')));
-CREATE INDEX IF NOT EXISTS idx_project_notes_project_id ON project_notes(project_id);
-CREATE INDEX IF NOT EXISTS idx_dealer_notes_dealer_id ON dealer_notes(dealer_id);
+CREATE INDEX idx_project_notes_project_id ON project_notes(project_id);
+CREATE INDEX idx_dealer_notes_dealer_id ON dealer_notes(dealer_id);
