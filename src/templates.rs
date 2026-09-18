@@ -25,7 +25,7 @@ pub const PROJECT_RESULTS_HTML: &str = INDEX_HTML;
 pub const DETAIL_HTML: &str = include_str!("templates/detail.html");
 
 pub const HELP_HTML: &str = include_str!("templates/help.html");
-pub const APP_VERSION: &str = "v20260915.01";
+pub const APP_VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 
 const MOBILE_LIST_STYLES: &str = r#"<style>
 .mobile-search-sort{display:none}

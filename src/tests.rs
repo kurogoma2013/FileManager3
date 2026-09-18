@@ -18,8 +18,9 @@ use sqlx::postgres::PgPoolOptions;
 use std::path::PathBuf;
 use std::sync::Once;
 use templates::{
-    detail_page, render_page, ADMIN_HTML, ADMIN_PROJECTS_HTML, DEALER_REGISTRATION_HTML,
-    DETAIL_HTML, HELP_HTML, INDEX_HTML, LOGIN_HTML, PROJECT_RESULTS_HTML, USER_REGISTRATION_HTML,
+    detail_page, render_page, ADMIN_HTML, ADMIN_PROJECTS_HTML, APP_VERSION,
+    DEALER_REGISTRATION_HTML, DETAIL_HTML, HELP_HTML, INDEX_HTML, LOGIN_HTML, PROJECT_RESULTS_HTML,
+    USER_REGISTRATION_HTML,
 };
 use tower::ServiceExt;
 
@@ -608,7 +609,7 @@ fn データベース整合性対策を適用する() {
 
 #[test]
 fn ログイン画面はユーザー名入力後にパスキー認証を開始する() {
-    assert!(render_page(LOGIN_HTML).contains("v20260915.01"));
+    assert!(render_page(LOGIN_HTML).contains(APP_VERSION));
     assert!(LOGIN_HTML.contains("startPasskeyLogin(true)"));
     assert!(LOGIN_HTML.contains("autoPasskeyLogin"));
     assert!(!LOGIN_HTML.contains("has_passkey"));
@@ -700,7 +701,7 @@ fn 画面にlanとホスト名の接続先を表示しない() {
         USER_REGISTRATION_HTML,
         DETAIL_HTML,
     ] {
-        assert!(render_page(html).contains("v20260915.01"));
+        assert!(render_page(html).contains(APP_VERSION));
         assert!(html.contains("/* ui-consistency */"));
         assert!(html.contains("--ui-radius:8px"));
         assert!(html.contains(".table th,.table td{padding:12px 14px}"));

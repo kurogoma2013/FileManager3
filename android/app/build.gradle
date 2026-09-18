@@ -9,7 +9,7 @@ def releaseSigningReady = ['storeFile', 'storePassword', 'keyAlias', 'keyPasswor
 
 android { namespace 'jp.filemanager.android'; compileSdk 36
     buildFeatures { buildConfig true }
-    defaultConfig { applicationId 'jp.filemanager.android'; minSdk 26; targetSdk 36; versionCode 2026091901; versionName '0.0.2026091901' }
+    defaultConfig { applicationId 'jp.filemanager.android'; minSdk 26; targetSdk 36; versionCode 2026091902; versionName '0.0.2026091902' }
     signingConfigs {
         if (releaseSigningReady) {
             release {

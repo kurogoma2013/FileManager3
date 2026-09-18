@@ -1,6 +1,6 @@
 [package]
 name = "filemanager3"
-version = "0.0.2026091901"
+version = "0.0.2026091902"
 edition = "2021"
 
 [[bin]]

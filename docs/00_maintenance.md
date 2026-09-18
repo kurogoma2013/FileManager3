@@ -5,7 +5,7 @@
 1. `git status --short --branch` で作業ツリーを確認する。既存の変更を上書きしない。
 2. 実装と関連する詳細仕様を同じ変更として更新する。
 3. `cargo fmt --all`、`cargo test --offline`、`cargo clippy --all-targets --offline -- -D warnings`、`git diff --check` を実行する。テストはPostgreSQLに接続するため、事前に `docker compose up -d` でテスト用DBを起動する（[テストの実行](#テストの実行)を参照）。
-4. バージョンを更新する。`Cargo.toml`を基準に、Web・Android・iOSの表示バージョンも合わせる。
+4. バージョンを更新する。`Cargo.toml`を基準に、Android・iOSの表示バージョンも合わせる。Web画面のサイドメニューに表示するバージョン（`src/templates.rs` の `APP_VERSION`）は `Cargo.toml` の `version` から `v0.0.YYYYMMDDNN` 形式で自動生成されるため手動更新は不要。
 5. 実行中のサービスを再起動し、待ち受けポートとHTTPSのヘルスチェックを確認する。
 6. 変更内容を日本語のコミットメッセージでコミットする。
 
