@@ -383,6 +383,8 @@ fn 仕様書リンクを全画面の管理サイドメニューへ補完する()
     assert!(html.contains("['07_android','Android版']"));
     assert!(html.contains("['10_docker_postgresql','Docker PostgreSQL']"));
     assert!(html.contains("['11_ubuntu_apache','Ubuntu・Apache 設定']"));
+    // 仕様書メニューの開閉は仕様書サブメニュー自身の表示状態で判定する（管理メニューの状態を見ると常に閉じてしまう）
+    assert!(html.contains("var currentSpecOpen=specSubmenu.style.display!=='none'"));
 }
 
 #[test]
