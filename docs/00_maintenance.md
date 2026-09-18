@@ -66,4 +66,50 @@ curl --insecure --fail --silent --show-error https://127.0.0.1:3000/
 lsof -nP -iTCP:3000 -sTCP:LISTEN
 ```
 
-本番の更新は `scripts/update.sh` を使用する。Ubuntu、systemd、Nginx、Let's Encryptの構築手順は [Ubuntu・Let's Encrypt 設定](09_ubuntu_letsencrypt.md) にまとめている。リバースプロキシにApacheを使う場合は [Ubuntu・Apache 設定](11_ubuntu_apache.md) を参照する。
+本番の更新は次の[本番サーバーの更新手順](#本番サーバーの更新手順スクリプト)に従い `scripts/update.sh` を使用する。Ubuntu、systemd、Nginx、Let's Encryptの構築手順は [Ubuntu・Let's Encrypt 設定](09_ubuntu_letsencrypt.md) にまとめている。リバースプロキシにApacheを使う場合は [Ubuntu・Apache 設定](11_ubuntu_apache.md) を参照する。
+
+## 本番サーバーの更新手順（スクリプト）
+
+Ubuntu + systemd 環境では、手動で `git pull`・ビルド・再起動を行わず、`scripts/update.sh` で一括更新する。スクリプトは次を順に実行し、途中で失敗した場合はサービスを再起動して終了コード1で停止する。
+
+1. 前提確認: root実行、`Cargo.toml` の存在、実行ユーザーの存在、必要コマンド（`cargo` `curl` `git` `pg_dump` `runuser` `systemctl` `tar` など）、ローカル変更が無いこと、サービスが稼働中であること
+2. `git pull --ff-only origin <ブランチ>` でソースコードを取得する（未追跡ファイルは保持したまま更新する）
+3. コミットが進んだ場合のみ `cargo build --locked --release` でリリースビルドする
+4. サービスを停止し、PostgreSQLの論理バックアップ（`pg_dump --format=custom`）とストレージの `tar.gz` を `FILEMANAGER_BACKUP_DIR/filemanager-<日時>/` に保存し、`metadata.txt`（日時・コミット・DB名・ストレージ）と `manifest.sha256` を書き出す
+5. サービスを起動し、稼働状態と `FILEMANAGER_HEALTH_URL` へのHTTPS疎通を確認する
+6. 更新前後のコミットと `systemctl status` の先頭を表示する
+
+### 実行例
+
+```bash
+cd /opt/filemanager/source
+sudo ./scripts/update.sh
+```
+
+ブランチやパスを変える場合は環境変数で指定する。
+
+```bash
+sudo FILEMANAGER_UPDATE_BRANCH=main \
+     FILEMANAGER_DATA_DIR=/var/lib/filemanager/data \
+     FILEMANAGER_BACKUP_DIR=/var/backups/filemanager \
+     ./scripts/update.sh
+```
+
+| 環境変数 | 既定値 | 用途 |
+| --- | --- | --- |
+| `FILEMANAGER_SERVICE` | `filemanager` | systemdのサービス名 |
+| `FILEMANAGER_RUN_USER` | `filemanager` | `git pull`・`cargo build`・`pg_dump` を実行するユーザー |
+| `FILEMANAGER_UPDATE_BRANCH` | 現在のブランチ | 取得するブランチ |
+| `FILEMANAGER_DATA_DIR` | `/var/lib/filemanager/data` | データディレクトリ |
+| `FILEMANAGER_STORAGE_DIR` | `$FILEMANAGER_DATA_DIR/storage` | バックアップ対象のストレージ |
+| `FILEMANAGER_DB_NAME` | `filemanager` | `pg_dump` 対象のデータベース名 |
+| `FILEMANAGER_BACKUP_DIR` | `/var/backups/filemanager` | バックアップの保存先 |
+| `FILEMANAGER_HEALTH_URL` | `https://127.0.0.1:3000/` | 更新後のヘルスチェックURL |
+
+### 失敗時の確認
+
+- `ローカル変更があります`: サーバー上で編集したファイルをコミットまたは `git stash` で退避してから再実行する
+- `サービスが稼働していません`: `sudo systemctl start filemanager` で起動してから再実行する（停止中の更新は対象外）
+- ビルド失敗: サービスは停止前なので稼働を継続している。`cargo build --locked --release` のログを確認する
+- ヘルスチェック失敗: サービスは起動済みなので `journalctl -u filemanager -n 50` とポート・証明書を確認する。502の切り分けは [Ubuntu・Let's Encrypt 設定](09_ubuntu_letsencrypt.md) を参照する
+- 巻き戻す場合: `git checkout <更新前コミット>` の後にリリースビルドと再起動を行い、必要なら `FILEMANAGER_BACKUP_DIR` の `database.dump` を `pg_restore`、`storage.tar.gz` を展開して復元する
