@@ -1,0 +1,14 @@
+[Unit]
+Description=FileManager backup (PostgreSQL dump and storage archive)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# 保持日数や保存先を変える場合はこのファイルの Environment= を編集する
+Environment=FILEMANAGER_BACKUP_KEEP_DAYS=14
+Environment=FILEMANAGER_BACKUP_DIR=/var/backups/filemanager
+Environment=FILEMANAGER_DATA_DIR=/var/lib/filemanager/data
+ExecStart=/opt/filemanager/source/scripts/backup.sh
+Nice=10
+IOSchedulingClass=idle

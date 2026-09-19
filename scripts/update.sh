@@ -7,8 +7,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVICE_NAME="${FILEMANAGER_SERVICE:-filemanager}"
 RUN_USER="${FILEMANAGER_RUN_USER:-filemanager}"
-DATA_DIR="${FILEMANAGER_DATA_DIR:-/var/lib/filemanager/data}"
-BACKUP_DIR="${FILEMANAGER_BACKUP_DIR:-/var/backups/filemanager}"
 HEALTH_URL="${FILEMANAGER_HEALTH_URL:-https://127.0.0.1:3000/}"
 
 log() {
@@ -33,38 +31,16 @@ run_as_app_user() {
 }
 
 backup_data() {
-  local timestamp database_name storage_dir backup_root backup_file storage_archive
-  timestamp="$(date '+%Y%m%d-%H%M%S')"
-  database_name="${FILEMANAGER_DB_NAME:-filemanager}"
-  storage_dir="${FILEMANAGER_STORAGE_DIR:-$DATA_DIR/storage}"
-  [ -d "$storage_dir" ] || fail "ストレージが見つかりません: $storage_dir"
-
-  install -d -m 750 "$BACKUP_DIR"
-  backup_root="$BACKUP_DIR/filemanager-${timestamp}"
-  install -d -m 750 "$backup_root"
-  backup_file="$backup_root/database.dump"
-  run_as_app_user pg_dump --format=custom --file="$backup_file" "$database_name"
-  storage_archive="$backup_root/storage.tar.gz"
-  tar -C "$storage_dir" -czf "$storage_archive" .
-  {
-    printf 'バックアップ日時: %s\n' "$timestamp"
-    printf 'コミット: %s\n' "$(git rev-parse HEAD)"
-    printf 'データベース: %s\n' "$database_name"
-    printf 'ストレージ: %s\n' "$storage_dir"
-  } > "$backup_root/metadata.txt"
-  sha256sum "$backup_file" "$storage_archive" > "$backup_root/manifest.sha256"
-  log "データベースとストレージをバックアップしました: $backup_root"
+  # バックアップ本体は scripts/backup.sh と共通。更新時は保持日数による世代削除を行わない
+  FILEMANAGER_BACKUP_KEEP_DAYS=0 "$ROOT_DIR/scripts/backup.sh" || fail "バックアップに失敗しました"
 }
 
 require_command cargo
 require_command curl
 require_command git
 require_command install
-require_command pg_dump
 require_command runuser
-require_command sha256sum
 require_command systemctl
-require_command tar
 
 [ "$(id -u)" -eq 0 ] || fail "このスクリプトは sudo または root で実行してください"
 [ -f "$ROOT_DIR/Cargo.toml" ] || fail "Cargo.toml が見つかりません: $ROOT_DIR"

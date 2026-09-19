@@ -51,6 +51,8 @@ cd /opt/filemanager/source
 sudo ./scripts/update.sh
 ```
 
+定期バックアップは `scripts/backup.sh` と `scripts/systemd/filemanager-backup.timer` で設定します（[Ubuntu・Let's Encrypt 設定](09_ubuntu_letsencrypt.md#14-定期バックアップを設定する)）。
+
 整合性検査を手動実行する場合:
 
 ```bash

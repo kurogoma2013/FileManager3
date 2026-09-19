@@ -426,6 +426,45 @@ sudo systemctl start filemanager
 sudo systemctl status filemanager --no-pager
 ```
 
+## 14. 定期バックアップを設定する
+
+`scripts/backup.sh` はPostgreSQLの論理ダンプ（`pg_dump --format=custom`）とストレージの `tar.gz` を `/var/backups/filemanager/filemanager-<日時>/` に保存し、保持日数（既定14日）を過ぎた世代を削除します。リポジトリの systemd ユニットを配置して毎日 03:30 に実行します。
+
+```bash
+sudo cp /opt/filemanager/source/scripts/systemd/filemanager-backup.service \
+       /opt/filemanager/source/scripts/systemd/filemanager-backup.timer \
+       /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now filemanager-backup.timer
+```
+
+初回は手動で実行して結果を確認します。
+
+```bash
+sudo systemctl start filemanager-backup.service
+sudo journalctl -u filemanager-backup.service -n 20 --no-pager
+sudo ls -l /var/backups/filemanager
+systemctl list-timers filemanager-backup.timer
+```
+
+保持日数・保存先・実行時刻を変える場合は `/etc/systemd/system/filemanager-backup.service` の `Environment=` と `filemanager-backup.timer` の `OnCalendar=` を編集し、`sudo systemctl daemon-reload` を実行します。バックアップはサービスを停止せずに取得するため、アップロード中のファイルはダンプとアーカイブで整合しない可能性があります。復元後は `cargo run -- check-integrity` で整合性を確認してください。
+
+バックアップ先はサーバー本体と同じディスクなので、ディスク障害に備える場合は `/var/backups/filemanager` を別サーバーやオブジェクトストレージへ同期してください（例: `rsync -a --delete /var/backups/filemanager/ backup-host:/srv/filemanager-backup/`）。
+
+### 復元手順
+
+```bash
+sudo systemctl stop filemanager
+sudo -u filemanager pg_restore --clean --if-exists --dbname=filemanager \
+  /var/backups/filemanager/filemanager-<日時>/database.dump
+sudo rm -rf /var/lib/filemanager/data/storage
+sudo install -d -o filemanager -g filemanager /var/lib/filemanager/data/storage
+sudo tar -C /var/lib/filemanager/data/storage \
+  -xzf /var/backups/filemanager/filemanager-<日時>/storage.tar.gz
+sudo chown -R filemanager:filemanager /var/lib/filemanager/data/storage
+sudo systemctl start filemanager
+```
+
 ## 参考資料
 
 - [KAGOYA CLOUD VPS セキュリティ](https://www.kagoya.jp/vps/feature/security/)

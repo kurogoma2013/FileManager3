@@ -106,10 +106,30 @@ sudo FILEMANAGER_UPDATE_BRANCH=main \
 | `FILEMANAGER_BACKUP_DIR` | `/var/backups/filemanager` | バックアップの保存先 |
 | `FILEMANAGER_HEALTH_URL` | `https://127.0.0.1:3000/` | 更新後のヘルスチェックURL |
 
+バックアップの取得は `scripts/backup.sh` を呼び出す（更新時は世代削除を行わない）。
+
 ### 失敗時の確認
 
 - `ローカル変更があります`: サーバー上で編集したファイルをコミットまたは `git stash` で退避してから再実行する
 - `サービスが稼働していません`: `sudo systemctl start filemanager` で起動してから再実行する（停止中の更新は対象外）
 - ビルド失敗: サービスは停止前なので稼働を継続している。`cargo build --locked --release` のログを確認する
 - ヘルスチェック失敗: サービスは起動済みなので `journalctl -u filemanager -n 50` とポート・証明書を確認する。502の切り分けは [Ubuntu・Let's Encrypt 設定](09_ubuntu_letsencrypt.md) を参照する
-- 巻き戻す場合: `git checkout <更新前コミット>` の後にリリースビルドと再起動を行い、必要なら `FILEMANAGER_BACKUP_DIR` の `database.dump` を `pg_restore`、`storage.tar.gz` を展開して復元する
+- 巻き戻す場合: `git checkout <更新前コミット>` の後にリリースビルドと再起動を行い、必要なら `FILEMANAGER_BACKUP_DIR` の `database.dump` を `pg_restore`、`storage.tar.gz` を展開して復元する（[定期バックアップ](09_ubuntu_letsencrypt.md#14-定期バックアップを設定する) の復元手順を参照）
+
+## 定期バックアップ（スクリプト）
+
+`scripts/backup.sh` はサービスを停止せずにPostgreSQLの論理ダンプとストレージの `tar.gz` を取得し、`metadata.txt` と `manifest.sha256` と共に `FILEMANAGER_BACKUP_DIR/filemanager-<日時>/` へ保存する。作成中は `.partial` 付きディレクトリに書き、完了後に改名するため、失敗した世代が完成品として残らない。
+
+```bash
+sudo ./scripts/backup.sh
+```
+
+| 環境変数 | 既定値 | 用途 |
+| --- | --- | --- |
+| `FILEMANAGER_BACKUP_KEEP_DAYS` | `14` | 保持日数。これを過ぎた世代を削除する。`0` で削除しない |
+| `FILEMANAGER_BACKUP_DIR` | `/var/backups/filemanager` | 保存先 |
+| `FILEMANAGER_DATA_DIR` / `FILEMANAGER_STORAGE_DIR` | `/var/lib/filemanager/data` / `$FILEMANAGER_DATA_DIR/storage` | バックアップ対象のストレージ |
+| `FILEMANAGER_DB_NAME` | `filemanager` | `pg_dump` 対象のデータベース名 |
+| `FILEMANAGER_RUN_USER` | `filemanager` | `pg_dump` を実行するユーザー（root実行時） |
+
+定期実行は `scripts/systemd/filemanager-backup.service` と `filemanager-backup.timer`（毎日 03:30、`Persistent=true` で停止中の分は次回起動時に補完）を `/etc/systemd/system/` に配置して有効化する。手順と復元方法は [Ubuntu・Let's Encrypt 設定](09_ubuntu_letsencrypt.md#14-定期バックアップを設定する) を参照する。
