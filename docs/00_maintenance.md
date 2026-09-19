@@ -72,8 +72,8 @@ lsof -nP -iTCP:3000 -sTCP:LISTEN
 
 Ubuntu + systemd 環境では、手動で `git pull`・ビルド・再起動を行わず、`scripts/update.sh` で一括更新する。スクリプトは次を順に実行し、途中で失敗した場合はサービスを再起動して終了コード1で停止する。
 
-1. 前提確認: root実行、`Cargo.toml` の存在、実行ユーザーの存在、必要コマンド（`cargo` `curl` `git` `pg_dump` `runuser` `systemctl` `tar` など）、ローカル変更が無いこと、サービスが稼働中であること
-2. `git pull --ff-only origin <ブランチ>` でソースコードを取得する（未追跡ファイルは保持したまま更新する）
+1. 前提確認: root実行、`Cargo.toml` と `.git` の存在、実行ユーザーの存在、必要コマンド（`cargo` `curl` `git` `pg_dump` `runuser` `systemctl` `tar` など）、ローカル変更が無いこと、サービスが稼働中であること
+2. `git pull --ff-only origin <ブランチ>` でソースコードを取得する（未追跡ファイルは保持したまま更新する）。git コマンドはすべて `FILEMANAGER_RUN_USER` で実行する（root で実行するとリポジトリの所有者チェックにより `Not a git repository` となるため）
 3. コミットが進んだ場合のみ `cargo build --locked --release` でリリースビルドする
 4. サービスを停止し、PostgreSQLの論理バックアップ（`pg_dump --format=custom`）とストレージの `tar.gz` を `FILEMANAGER_BACKUP_DIR/filemanager-<日時>/` に保存し、`metadata.txt`（日時・コミット・DB名・ストレージ）と `manifest.sha256` を書き出す
 5. サービスを起動し、稼働状態と `FILEMANAGER_HEALTH_URL` へのHTTPS疎通を確認する

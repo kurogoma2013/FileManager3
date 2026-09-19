@@ -30,6 +30,12 @@ run_as_app_user() {
   fi
 }
 
+# リポジトリは実行ユーザー所有のため、root のまま git を実行すると safe.directory の
+# 所有者チェックで「Not a git repository」となる。git は常に実行ユーザーで動かす
+app_git() {
+  run_as_app_user git -C "$ROOT_DIR" "$@"
+}
+
 backup_data() {
   # バックアップ本体は scripts/backup.sh と共通。更新時は保持日数による世代削除を行わない
   FILEMANAGER_BACKUP_KEEP_DAYS=0 "$ROOT_DIR/scripts/backup.sh" || fail "バックアップに失敗しました"
@@ -44,26 +50,27 @@ require_command systemctl
 
 [ "$(id -u)" -eq 0 ] || fail "このスクリプトは sudo または root で実行してください"
 [ -f "$ROOT_DIR/Cargo.toml" ] || fail "Cargo.toml が見つかりません: $ROOT_DIR"
+[ -d "$ROOT_DIR/.git" ] || fail "Git リポジトリではありません: $ROOT_DIR"
 id "$RUN_USER" >/dev/null 2>&1 || fail "実行ユーザーが見つかりません: $RUN_USER"
 
 cd "$ROOT_DIR"
-branch="${FILEMANAGER_UPDATE_BRANCH:-$(git symbolic-ref --quiet --short HEAD || true)}"
+branch="${FILEMANAGER_UPDATE_BRANCH:-$(app_git symbolic-ref --quiet --short HEAD || true)}"
 [ -n "$branch" ] || fail "ブランチを判定できません。FILEMANAGER_UPDATE_BRANCH を指定してください"
 
-if ! git diff --quiet || ! git diff --cached --quiet; then
-  git status --short >&2
+if ! app_git diff --quiet || ! app_git diff --cached --quiet; then
+  app_git status --short >&2
   fail "ローカル変更があります。上記のファイルを確認し、不要なら 'git checkout -- <ファイル>'、残すなら 'git stash' で退避してから実行してください（Cargo.lock だけなら checkout で戻せます）"
 fi
-if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+if [ -n "$(app_git ls-files --others --exclude-standard)" ]; then
   log "警告: 未追跡ファイルは保持したまま更新します"
 fi
 
 systemctl is-active --quiet "$SERVICE_NAME" || fail "サービスが稼働していません: $SERVICE_NAME"
 
-before_commit="$(git rev-parse HEAD)"
+before_commit="$(app_git rev-parse HEAD)"
 log "更新を取得しています: $branch"
-run_as_app_user git pull --ff-only origin "$branch"
-after_commit="$(git rev-parse HEAD)"
+app_git pull --ff-only origin "$branch"
+after_commit="$(app_git rev-parse HEAD)"
 
 if [ "$before_commit" = "$after_commit" ]; then
   log "ソースコードに更新はありません"

@@ -69,7 +69,7 @@ storage_archive="$work_root/storage.tar.gz"
 tar -C "$STORAGE_DIR" -czf "$storage_archive" .
 {
   printf 'バックアップ日時: %s\n' "$timestamp"
-  printf 'コミット: %s\n' "$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || echo '不明')"
+  printf 'コミット: %s\n' "$(run_as_app_user git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || echo '不明')"
   printf 'データベース: %s\n' "$DB_NAME"
   printf 'ストレージ: %s\n' "$STORAGE_DIR"
 } > "$work_root/metadata.txt"

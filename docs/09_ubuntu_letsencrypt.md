@@ -431,6 +431,7 @@ sudo FILEMANAGER_BACKUP_DIR=/mnt/backup/filemanager ./scripts/update.sh
 | --- | --- |
 | `ローカル変更があります` | 直前に表示される `git status --short` の一覧を確認する。`Cargo.lock` など不要な差分は `sudo -u filemanager git -C /opt/filemanager/source checkout -- <ファイル>` で戻し、残す変更は `sudo -u filemanager git -C /opt/filemanager/source stash` で退避してから再実行する。実行権限だけの差分なら `git config core.fileMode false` |
 | `サービスが稼働していません` | `sudo systemctl start filemanager` で起動してから再実行する |
+| `warning: Not a git repository` の直後に `ローカル変更があります` | 旧版のスクリプトが root で git を実行したため、`filemanager` 所有のリポジトリが Git の所有者チェックで拒否されている。`sudo -u filemanager git -C /opt/filemanager/source pull --ff-only` で最新のスクリプトを取り込んでから再実行する |
 | ビルド失敗 | サービスは停止前なので稼働を継続している。`cargo build --locked --release` のログを確認する |
 | ヘルスチェック失敗 | サービスは起動済み。`sudo journalctl -u filemanager -n 50 --no-pager` と [12. 更新と動作を確認する](#12-更新と動作を確認する) の切り分けを行う |
 
