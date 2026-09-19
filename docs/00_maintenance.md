@@ -110,7 +110,7 @@ sudo FILEMANAGER_UPDATE_BRANCH=main \
 
 ### 失敗時の確認
 
-- `ローカル変更があります`: サーバー上で編集したファイルをコミットまたは `git stash` で退避してから再実行する
+- `ローカル変更があります`: 直前に表示される `git status --short` の一覧を確認し、不要な差分（`Cargo.lock` など）は `git checkout -- <ファイル>` で戻し、残す変更は `git stash` で退避してから再実行する
 - `サービスが稼働していません`: `sudo systemctl start filemanager` で起動してから再実行する（停止中の更新は対象外）
 - ビルド失敗: サービスは停止前なので稼働を継続している。`cargo build --locked --release` のログを確認する
 - ヘルスチェック失敗: サービスは起動済みなので `journalctl -u filemanager -n 50` とポート・証明書を確認する。502の切り分けは [Ubuntu・Let's Encrypt 設定](09_ubuntu_letsencrypt.md) を参照する

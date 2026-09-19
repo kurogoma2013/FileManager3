@@ -51,7 +51,8 @@ branch="${FILEMANAGER_UPDATE_BRANCH:-$(git symbolic-ref --quiet --short HEAD || 
 [ -n "$branch" ] || fail "ブランチを判定できません。FILEMANAGER_UPDATE_BRANCH を指定してください"
 
 if ! git diff --quiet || ! git diff --cached --quiet; then
-  fail "ローカル変更があります。コミットまたは退避してから実行してください"
+  git status --short >&2
+  fail "ローカル変更があります。上記のファイルを確認し、不要なら 'git checkout -- <ファイル>'、残すなら 'git stash' で退避してから実行してください（Cargo.lock だけなら checkout で戻せます）"
 fi
 if [ -n "$(git ls-files --others --exclude-standard)" ]; then
   log "警告: 未追跡ファイルは保持したまま更新します"
