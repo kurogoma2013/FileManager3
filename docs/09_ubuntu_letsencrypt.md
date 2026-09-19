@@ -412,19 +412,29 @@ sudo ss -ltnp | grep 3000
 
 ## 13. 更新時の手順
 
-新しいバージョンを配置する場合は、まずPostgreSQLのダンプとストレージを同一更新単位で保存し、ソースコードを更新してビルドした後、サービスを再起動します。バックアップ先はアクセス制限した保存先を使用してください。
+新しいバージョンを配置する場合は `scripts/update.sh` を使用します。ソースコードの取得、リリースビルド、サービス停止中のPostgreSQLダンプとストレージのバックアップ、サービス再起動、HTTPS疎通確認を順に行い、途中で失敗した場合はサービスを再起動して終了コード1で停止します。
 
 ```bash
-sudo install -d -m 750 /var/backups/filemanager
-sudo -u filemanager pg_dump --format=custom --file=/var/backups/filemanager/database.dump filemanager
-sudo tar -C /var/lib/filemanager/data -czf /var/backups/filemanager/storage.tar.gz storage
-sudo systemctl stop filemanager
-sudo -u filemanager git -C /opt/filemanager/source pull --ff-only
-sudo -u filemanager sh -c \
-  'cd /opt/filemanager/source && cargo build --locked --release'
-sudo systemctl start filemanager
-sudo systemctl status filemanager --no-pager
+cd /opt/filemanager/source
+sudo ./scripts/update.sh
 ```
+
+完了すると更新前後のコミットと `systemctl status filemanager` の先頭が表示されます。バックアップは `/var/backups/filemanager/filemanager-<日時>/` に保存されます（保存先を変える場合は `FILEMANAGER_BACKUP_DIR` を指定）。
+
+```bash
+sudo FILEMANAGER_BACKUP_DIR=/mnt/backup/filemanager ./scripts/update.sh
+```
+
+主なエラーと対処:
+
+| メッセージ | 対処 |
+| --- | --- |
+| `ローカル変更があります` | サーバー上で編集したファイルをコミットまたは `sudo -u filemanager git -C /opt/filemanager/source stash` で退避してから再実行する |
+| `サービスが稼働していません` | `sudo systemctl start filemanager` で起動してから再実行する |
+| ビルド失敗 | サービスは停止前なので稼働を継続している。`cargo build --locked --release` のログを確認する |
+| ヘルスチェック失敗 | サービスは起動済み。`sudo journalctl -u filemanager -n 50 --no-pager` と [12. 更新と動作を確認する](#12-更新と動作を確認する) の切り分けを行う |
+
+環境変数の一覧と手順の詳細は [保守ガイド](00_maintenance.md#本番サーバーの更新手順スクリプト) を参照してください。
 
 ## 14. 定期バックアップを設定する
 
